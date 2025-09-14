@@ -13,6 +13,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { path: '/about', label: 'Acerca', icon: '👤' },
     { path: '/services', label: 'Servicios', icon: '⚙️' },
     { path: '/contact', label: 'Contacto', icon: '📞' },
+    { path: '/config', label: 'Config', icon: '🔐' },
   ];
 
   return (
