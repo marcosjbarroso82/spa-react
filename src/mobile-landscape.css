@@ -1,4 +1,4 @@
-/* Optimizaciones específicas para móviles en formato apaisado */
+/* Optimizaciones específicas para móviles en formato apaisado con tema oscuro */
 
 /* Asegurar que el viewport se ajuste correctamente */
 @viewport {
@@ -6,6 +6,19 @@
   initial-scale: 1.0;
   maximum-scale: 1.0;
   user-scalable: no;
+}
+
+/* Optimizaciones para tema oscuro en móviles */
+@media screen and (orientation: landscape) and (max-height: 600px) {
+  /* Mejorar contraste en landscape oscuro */
+  .mobile-landscape-text {
+    color: #e5e7eb; /* gray-200 */
+  }
+  
+  /* Ajustar sombras para tema oscuro */
+  .mobile-landscape-card {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+  }
 }
 
 /* Optimizaciones para landscape en móviles */
