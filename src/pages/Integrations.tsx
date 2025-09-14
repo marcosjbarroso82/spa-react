@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import TTSBrowser from './integrations/TTSBrowser';
 import TakePhoto from './integrations/TakePhoto';
+import MathpixOCR from './integrations/MathpixOCR';
 
 const Integrations: React.FC = () => {
   const location = useLocation();
@@ -9,6 +10,7 @@ const Integrations: React.FC = () => {
   const integrationItems = [
     { path: '/integrations/tts-browser', label: 'TTS Browser', icon: '🔊', description: 'Texto a voz del navegador' },
     { path: '/integrations/take-photo', label: 'Tomar Foto', icon: '📷', description: 'Capturar foto con la cámara' },
+    { path: '/integrations/mathpix-ocr', label: 'Mathpix OCR', icon: '📐', description: 'Reconocimiento óptico de matemáticas' },
   ];
 
   return (
@@ -57,6 +59,7 @@ const Integrations: React.FC = () => {
             } />
             <Route path="/tts-browser" element={<TTSBrowser />} />
             <Route path="/take-photo" element={<TakePhoto />} />
+            <Route path="/mathpix-ocr" element={<MathpixOCR />} />
           </Routes>
         </div>
       </div>
