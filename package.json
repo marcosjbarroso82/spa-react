@@ -2,7 +2,7 @@
   "name": "spa-react",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://tu-usuario.github.io/spa-react",
+  "homepage": "https://marcosjbarroso82.github.io/spa-react",
   "dependencies": {
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.8.0",
