@@ -6,6 +6,7 @@ import About from './pages/About';
 import Services from './pages/Services';
 import Contact from './pages/Contact';
 import Config from './pages/Config';
+import Integrations from './pages/Integrations';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Route path="/services" element={<Services />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/config" element={<Config />} />
+          <Route path="/integrations/*" element={<Integrations />} />
         </Routes>
       </Layout>
     </Router>
