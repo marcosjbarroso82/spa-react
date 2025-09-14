@@ -1,0 +1,111 @@
+/* Optimizaciones específicas para móviles en formato apaisado */
+
+/* Asegurar que el viewport se ajuste correctamente */
+@viewport {
+  width: device-width;
+  initial-scale: 1.0;
+  maximum-scale: 1.0;
+  user-scalable: no;
+}
+
+/* Optimizaciones para landscape en móviles */
+@media screen and (orientation: landscape) and (max-height: 600px) {
+  /* Reducir padding en móviles landscape */
+  .mobile-landscape-padding {
+    padding: 0.5rem;
+  }
+  
+  /* Ajustar altura de navegación */
+  .mobile-landscape-nav {
+    padding: 0.25rem 0.5rem;
+  }
+  
+  /* Optimizar grid para landscape */
+  .mobile-landscape-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+  }
+  
+  /* Reducir tamaño de fuente en landscape */
+  .mobile-landscape-text {
+    font-size: 0.875rem;
+  }
+  
+  /* Ajustar altura de tarjetas */
+  .mobile-landscape-card {
+    padding: 0.75rem;
+    min-height: auto;
+  }
+  
+  /* Optimizar formularios para landscape */
+  .mobile-landscape-form {
+    padding: 1rem;
+  }
+  
+  .mobile-landscape-form input,
+  .mobile-landscape-form textarea {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* Optimizaciones para pantallas muy pequeñas en landscape */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  /* Reducir aún más el padding */
+  .mobile-landscape-padding {
+    padding: 0.25rem;
+  }
+  
+  /* Hacer la navegación más compacta */
+  .mobile-landscape-nav {
+    padding: 0.125rem 0.25rem;
+  }
+  
+  .mobile-landscape-nav span {
+    font-size: 0.75rem;
+  }
+  
+  /* Ajustar grid para pantallas muy pequeñas */
+  .mobile-landscape-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.25rem;
+  }
+  
+  /* Reducir tamaño de iconos */
+  .mobile-landscape-icon {
+    font-size: 1.25rem;
+  }
+}
+
+/* Prevenir zoom en inputs en iOS */
+@media screen and (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Optimizaciones de scroll suave */
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mejorar la experiencia táctil */
+button, 
+a, 
+[role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+}
+
+/* Optimizar para dispositivos con notch */
+@supports (padding: max(0px)) {
+  .safe-area-padding {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
