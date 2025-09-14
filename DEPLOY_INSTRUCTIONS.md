@@ -1,5 +1,6 @@
 # Instrucciones de Deploy a GitHub Pages
 
+
 ## Configuración Completada ✅
 
 Tu aplicación ya está configurada para hacer deploy a GitHub Pages. Aquí están los pasos para completar el proceso:
