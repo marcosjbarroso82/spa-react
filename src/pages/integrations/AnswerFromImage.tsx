@@ -1,5 +1,6 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { useCredentials } from '../../hooks/useCredentials';
+import Webcam from 'react-webcam';
 
 type FlowiseResponse = any;
 
@@ -19,9 +20,14 @@ const AnswerFromImage: React.FC = () => {
     const saved = localStorage.getItem('answerFromImage_autoRead');
     return saved === 'true';
   });
+  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const webcamRef = useRef<Webcam>(null);
   const speechQueueRef = useRef<string[]>([]);
   const isSpeakingRef = useRef<boolean>(false);
+  const streamRef = useRef<MediaStream | null>(null);
+  const imageCaptureRef = useRef<any>(null);
 
   const appId = getCredentialByKey('mathpix_app_id');
   const apiKey = getCredentialByKey('mathpix_api_key');
@@ -66,6 +72,127 @@ const AnswerFromImage: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('answerFromImage_autoRead', autoRead.toString());
   }, [autoRead]);
+
+  // Funciones de cámara (basadas en TakePhoto.tsx)
+  const startCamera = () => {
+    setError(null);
+    setIsCameraOn(true);
+  };
+
+  const stopCamera = () => {
+    setIsCameraOn(false);
+    try {
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    } catch {}
+    streamRef.current = null;
+    imageCaptureRef.current = null;
+  };
+
+  const blobToDataUrl = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+  const capturePhoto = useCallback(async () => {
+    if (!webcamRef.current) {
+      console.error('Webcam no está disponible');
+      setError('La cámara no está disponible');
+      return;
+    }
+
+    setIsCapturing(true);
+    
+    try {
+      // Intentar ImageCapture para obtener foto a resolución nativa
+      const track = streamRef.current?.getVideoTracks?.()[0];
+      if (track && 'ImageCapture' in window) {
+        if (!imageCaptureRef.current) {
+          // @ts-ignore ImageCapture no está tipado en TS DOM en algunos entornos
+          imageCaptureRef.current = new (window as any).ImageCapture(track);
+        }
+        try {
+          const blob: Blob = await imageCaptureRef.current.takePhoto();
+          const dataUrl = await blobToDataUrl(blob);
+          addPhotoFromDataUrl(dataUrl);
+          setError(null);
+          console.log('Foto capturada a resolución nativa con ImageCapture');
+          return;
+        } catch (icErr) {
+          console.warn('Fallo ImageCapture, usando getScreenshot', icErr);
+        }
+      }
+
+      // Alternativa: captura desde el canvas de react-webcam
+      const imageSrc = webcamRef.current.getScreenshot();
+      
+      if (imageSrc) {
+        addPhotoFromDataUrl(imageSrc);
+        setError(null);
+        console.log('Foto capturada con getScreenshot');
+      } else {
+        console.error('Error al capturar la foto');
+        setError('Error al capturar la foto. Intenta de nuevo.');
+      }
+    } catch (err) {
+      console.error('Error durante la captura:', err);
+      setError('Error al capturar la foto. Intenta de nuevo.');
+    } finally {
+      setIsCapturing(false);
+    }
+  }, []);
+
+  const addPhotoFromDataUrl = (dataUrl: string) => {
+    // Convertir dataUrl a File
+    fetch(dataUrl)
+      .then(res => res.blob())
+      .then(blob => {
+        const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        setSelectedFiles(prev => [...prev, file]);
+        setPreviewUrls(prev => [...prev, dataUrl]);
+        setOcrText(null);
+        setLecturas([]);
+        setError(null);
+      })
+      .catch(err => {
+        console.error('Error al convertir foto a archivo:', err);
+        setError('Error al procesar la foto capturada');
+      });
+  };
+
+  const onUserMedia = async (stream: MediaStream) => {
+    console.log('Cámara conectada exitosamente');
+    setError(null);
+    streamRef.current = stream;
+
+    try {
+      const track = stream.getVideoTracks()[0];
+      // Solicitar autoenfoque y ajustes continuos cuando sea posible
+      await (track as any).applyConstraints({
+        advanced: [
+          { focusMode: 'continuous' },
+          { whiteBalanceMode: 'continuous' },
+          { exposureMode: 'continuous' }
+        ]
+      } as any).catch(() => {});
+
+      if ('ImageCapture' in window) {
+        try {
+          // @ts-ignore
+          imageCaptureRef.current = new (window as any).ImageCapture(track);
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('No se pudieron aplicar constraints avanzados:', e);
+    }
+  };
+
+  const onUserMediaError = (error: string | DOMException) => {
+    console.error('Error de cámara:', error);
+    setError('No se pudo acceder a la cámara. Verifica los permisos.');
+  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -284,21 +411,84 @@ const AnswerFromImage: React.FC = () => {
       <div className="text-center">
         <div className="text-6xl mb-4">🖼️</div>
         <h2 className="text-2xl font-semibold mb-2 text-blue-400">Contestar por Imagen</h2>
-        <p className="text-gray-300">Sube una o más imágenes, las procesamos con Mathpix OCR y consultamos Flowise.</p>
+        <p className="text-gray-300">Sube imágenes o toma fotos, las procesamos con Mathpix OCR y consultamos Flowise.</p>
       </div>
 
       <div className="bg-gray-700 rounded-lg p-6 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Agregar imagen</label>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileSelect}
-            className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-          />
-          <p className="text-xs text-gray-400 mt-1">Máximo 5MB por archivo. Agrega una imagen a la vez.</p>
+        {/* Opciones para agregar imágenes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Subir archivo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">📁 Subir imagen</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+            />
+            <p className="text-xs text-gray-400 mt-1">Máximo 5MB por archivo</p>
+          </div>
+
+          {/* Tomar foto */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">📷 Tomar foto</label>
+            <div className="flex gap-2">
+              {!isCameraOn ? (
+                <button
+                  onClick={startCamera}
+                  className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded text-sm transition-colors duration-200"
+                >
+                  📹 Activar Cámara
+                </button>
+              ) : (
+                <button
+                  onClick={stopCamera}
+                  className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded text-sm transition-colors duration-200"
+                >
+                  📹 Desactivar
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Usa la cámara de tu dispositivo</p>
+          </div>
         </div>
+
+        {/* Cámara */}
+        {isCameraOn && (
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium text-gray-300">Cámara activa:</h4>
+            <div className="relative bg-black rounded-lg overflow-hidden">
+              <Webcam
+                ref={webcamRef}
+                audio={false}
+                screenshotFormat="image/jpeg"
+                screenshotQuality={1}
+                videoConstraints={{
+                  facingMode: { ideal: 'environment' },
+                  width: { ideal: 3840 },
+                  height: { ideal: 2160 },
+                  frameRate: { ideal: 30 }
+                }}
+                onUserMedia={onUserMedia}
+                onUserMediaError={onUserMediaError}
+                className="w-full h-auto max-h-64 object-cover"
+              />
+              <div className="absolute top-4 right-4">
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              </div>
+            </div>
+            <div className="flex justify-center">
+              <button
+                onClick={capturePhoto}
+                disabled={isCapturing}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors duration-200 flex items-center gap-2"
+              >
+                {isCapturing ? '📸 Capturando...' : '📸 Tomar Foto'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center space-x-3">
           <label className="flex items-center space-x-2">
