@@ -9,8 +9,8 @@ const HERRAMIENTAS_CON_RESPUESTAS_URL = 'http://localhost:3008/api/v1/prediction
 
 const AnswerFromImage: React.FC = () => {
   const { getCredentialByKey, isLoading: credentialsLoading } = useCredentials();
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrText, setOcrText] = useState<string | null>(null);
   const [lecturas, setLecturas] = useState<string[]>([]);
@@ -26,7 +26,7 @@ const AnswerFromImage: React.FC = () => {
   const appId = getCredentialByKey('mathpix_app_id');
   const apiKey = getCredentialByKey('mathpix_api_key');
 
-  const canProcess = useMemo(() => !!selectedFile && !!appId && !!apiKey && !credentialsLoading, [selectedFile, appId, apiKey, credentialsLoading]);
+  const canProcess = useMemo(() => selectedFiles.length > 0 && !!appId && !!apiKey && !credentialsLoading, [selectedFiles, appId, apiKey, credentialsLoading]);
 
   // Función para procesar la cola de speech
   const processSpeechQueue = () => {
@@ -68,27 +68,52 @@ const AnswerFromImage: React.FC = () => {
   }, [autoRead]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] || null;
+    const file = event.target.files?.[0];
     if (!file) return;
+    
+    // Validar archivo
     if (!file.type.startsWith('image/')) {
-      setError('Por favor selecciona una imagen válida');
+      setError('Por favor selecciona un archivo de imagen válido');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError('El archivo es demasiado grande. Máximo 5MB');
+      setError('El archivo es demasiado grande. El tamaño máximo es 5MB');
       return;
     }
-    setSelectedFile(file);
+    
+    // Agregar a la lista existente
+    setSelectedFiles(prev => [...prev, file]);
     setError(null);
     setOcrText(null);
     setLecturas([]);
+    
+    // Crear preview y agregar a la lista
     const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
+    setPreviewUrls(prev => [...prev, url]);
+    
+    // Limpiar el input para permitir seleccionar el mismo archivo otra vez
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    // Revocar URL de la imagen removida
+    URL.revokeObjectURL(previewUrls[index]);
+    
+    // Remover de ambas listas
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setPreviewUrls(prev => prev.filter((_, i) => i !== index));
+    setOcrText(null);
+    setLecturas([]);
+    setError(null);
   };
 
   const handleClear = () => {
-    setSelectedFile(null);
-    setPreviewUrl(null);
+    // Limpiar URLs de preview para liberar memoria
+    previewUrls.forEach(url => URL.revokeObjectURL(url));
+    setSelectedFiles([]);
+    setPreviewUrls([]);
     setOcrText(null);
     setLecturas([]);
     setError(null);
@@ -96,53 +121,74 @@ const AnswerFromImage: React.FC = () => {
   };
 
   const process = async () => {
-    if (!selectedFile || !appId || !apiKey) return;
+    if (selectedFiles.length === 0 || !appId || !apiKey) return;
     setIsProcessing(true);
     setError(null);
     setLecturas([]);
 
     try {
-      console.log('[AnswerFromImage] Leyendo imagen y convirtiendo a base64');
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(selectedFile);
-      });
+      console.log(`[AnswerFromImage] Procesando ${selectedFiles.length} imágenes`);
+      
+      // Procesar cada imagen secuencialmente con Mathpix
+      const ocrResults: string[] = [];
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        console.log(`[AnswerFromImage] Procesando imagen ${i + 1}/${selectedFiles.length}`);
+        
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
 
-      console.log('[AnswerFromImage] Enviando a Mathpix');
-      const mathpixRes = await fetch('https://api.mathpix.com/v3/text', {
-        method: 'POST',
-        headers: {
-          'app_id': appId,
-          'app_key': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          src: `data:image/${selectedFile.type.split('/')[1]};base64,${base64}`,
-          formats: ['text'],
-        }),
-      });
-      if (!mathpixRes.ok) {
-        const errData = await mathpixRes.json().catch(() => ({}));
-        throw new Error(errData.error || `Mathpix error ${mathpixRes.status}`);
+        const mathpixRes = await fetch('https://api.mathpix.com/v3/text', {
+          method: 'POST',
+          headers: {
+            'app_id': appId,
+            'app_key': apiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            src: `data:image/${file.type.split('/')[1]};base64,${base64}`,
+            formats: ['text'],
+          }),
+        });
+        
+        if (!mathpixRes.ok) {
+          const errData = await mathpixRes.json().catch(() => ({}));
+          throw new Error(errData.error || `Mathpix error ${mathpixRes.status} en imagen ${i + 1}`);
+        }
+        
+        const mathpixData = await mathpixRes.json();
+        const text: string = mathpixData?.text || '';
+        console.log(`[AnswerFromImage] OCR ${i + 1} texto:`, text);
+        
+        if (text.trim()) {
+          ocrResults.push(`OCR ${i + 1}: ${text}`);
+        } else {
+          console.warn(`[AnswerFromImage] Imagen ${i + 1} no devolvió texto`);
+          ocrResults.push(`OCR ${i + 1}: [Sin texto reconocido]`);
+        }
       }
-      const mathpixData = await mathpixRes.json();
-      const text: string = mathpixData?.text || '';
-      setOcrText(text);
-      console.log('[AnswerFromImage] OCR texto:', text);
-      if (!text.trim()) {
-        throw new Error('Mathpix no devolvió texto');
+      
+      // Compaginar todos los resultados
+      const compiledText = ocrResults.join('\n\n');
+      setOcrText(compiledText);
+      console.log('[AnswerFromImage] Texto compaginado:', compiledText);
+      
+      if (!compiledText.trim()) {
+        throw new Error('Ninguna imagen devolvió texto');
       }
 
       console.log('[AnswerFromImage] Llamando Flowise: Analiza Enunciado');
       const analizaRes = await fetch(ANALIZA_ENUNCIADO_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: text }),
+        body: JSON.stringify({ question: compiledText }),
       });
       const analizaContentType = analizaRes.headers.get('content-type') || '';
       const analizaData: FlowiseResponse = analizaContentType.includes('application/json') ? await analizaRes.json() : await analizaRes.text();
@@ -238,12 +284,12 @@ const AnswerFromImage: React.FC = () => {
       <div className="text-center">
         <div className="text-6xl mb-4">🖼️</div>
         <h2 className="text-2xl font-semibold mb-2 text-blue-400">Contestar por Imagen</h2>
-        <p className="text-gray-300">Sube una imagen, la procesamos con Mathpix OCR y consultamos Flowise.</p>
+        <p className="text-gray-300">Sube una o más imágenes, las procesamos con Mathpix OCR y consultamos Flowise.</p>
       </div>
 
       <div className="bg-gray-700 rounded-lg p-6 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Seleccionar imagen</label>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Agregar imagen</label>
           <input
             ref={fileInputRef}
             type="file"
@@ -251,7 +297,7 @@ const AnswerFromImage: React.FC = () => {
             onChange={handleFileSelect}
             className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
           />
-          <p className="text-xs text-gray-400 mt-1">Máximo 5MB</p>
+          <p className="text-xs text-gray-400 mt-1">Máximo 5MB por archivo. Agrega una imagen a la vez.</p>
         </div>
 
         <div className="flex items-center space-x-3">
@@ -266,11 +312,29 @@ const AnswerFromImage: React.FC = () => {
           </label>
         </div>
 
-        {previewUrl && (
+        {previewUrls.length > 0 && (
           <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-300">Vista previa:</h4>
-            <div className="flex justify-center">
-              <img src={previewUrl} alt="Preview" className="max-w-full max-h-64 rounded-lg border border-gray-500" />
+            <h4 className="text-sm font-medium text-gray-300">Imágenes seleccionadas ({previewUrls.length}):</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {previewUrls.map((url, index) => (
+                <div key={index} className="relative space-y-2">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-gray-400">Imagen {index + 1}</div>
+                    <button
+                      onClick={() => handleRemoveImage(index)}
+                      className="text-red-400 hover:text-red-300 text-sm"
+                      title="Remover imagen"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <img 
+                    src={url} 
+                    alt={`Preview ${index + 1}`} 
+                    className="w-full max-h-48 object-contain rounded-lg border border-gray-500" 
+                  />
+                </div>
+              ))}
             </div>
             <div className="flex gap-2">
               <button
@@ -278,9 +342,9 @@ const AnswerFromImage: React.FC = () => {
                 disabled={!canProcess || isProcessing}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
               >
-                {isProcessing ? '🔄 Procesando…' : '🚀 Procesar y Contestar'}
+                {isProcessing ? '🔄 Procesando…' : `🚀 Procesar ${selectedFiles.length} imagen${selectedFiles.length > 1 ? 'es' : ''}`}
               </button>
-              <button onClick={handleClear} className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200">🗑️ Limpiar</button>
+              <button onClick={handleClear} className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200">🗑️ Limpiar todo</button>
             </div>
           </div>
         )}
