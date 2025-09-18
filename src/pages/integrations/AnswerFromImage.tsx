@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useCredentials } from '../../hooks/useCredentials';
 
 type FlowiseResponse = any;
@@ -15,12 +15,57 @@ const AnswerFromImage: React.FC = () => {
   const [ocrText, setOcrText] = useState<string | null>(null);
   const [lecturas, setLecturas] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [autoRead, setAutoRead] = useState<boolean>(() => {
+    const saved = localStorage.getItem('answerFromImage_autoRead');
+    return saved === 'true';
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const speechQueueRef = useRef<string[]>([]);
+  const isSpeakingRef = useRef<boolean>(false);
 
   const appId = getCredentialByKey('mathpix_app_id');
   const apiKey = getCredentialByKey('mathpix_api_key');
 
   const canProcess = useMemo(() => !!selectedFile && !!appId && !!apiKey && !credentialsLoading, [selectedFile, appId, apiKey, credentialsLoading]);
+
+  // Función para procesar la cola de speech
+  const processSpeechQueue = () => {
+    if (isSpeakingRef.current || speechQueueRef.current.length === 0) return;
+    
+    const text = speechQueueRef.current.shift();
+    if (!text) return;
+    
+    isSpeakingRef.current = true;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'es-ES'; // Configurar idioma español
+    utterance.rate = 0.9; // Velocidad ligeramente más lenta para mejor comprensión
+    utterance.pitch = 1.0; // Tono normal
+    utterance.volume = 1.0; // Volumen máximo
+    
+    utterance.onend = () => {
+      isSpeakingRef.current = false;
+      // Procesar siguiente en la cola
+      setTimeout(processSpeechQueue, 100);
+    };
+    utterance.onerror = () => {
+      isSpeakingRef.current = false;
+      setTimeout(processSpeechQueue, 100);
+    };
+    
+    speechSynthesis.speak(utterance);
+  };
+
+  // Función para agregar texto a la cola de speech
+  const queueSpeech = (text: string) => {
+    if (!autoRead) return;
+    speechQueueRef.current.push(text);
+    processSpeechQueue();
+  };
+
+  // Guardar preferencia de autoRead en localStorage
+  useEffect(() => {
+    localStorage.setItem('answerFromImage_autoRead', autoRead.toString());
+  }, [autoRead]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
@@ -159,6 +204,14 @@ const AnswerFromImage: React.FC = () => {
       const l2 = extractLectura(toolsData);
       const collected = [l1, l2].filter((x): x is string => typeof x === 'string');
       setLecturas(collected);
+
+      // Agregar a la cola de speech si autoRead está activado
+      if (l1) {
+        queueSpeech(`RAG con Respuestas: ${l1}`);
+      }
+      if (l2) {
+        queueSpeech(`Herramientas con Respuestas: ${l2}`);
+      }
     } catch (err) {
       console.error('[AnswerFromImage] Error en el proceso', err);
       setError(err instanceof Error ? err.message : 'Error en el proceso');
@@ -199,6 +252,18 @@ const AnswerFromImage: React.FC = () => {
             className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
           />
           <p className="text-xs text-gray-400 mt-1">Máximo 5MB</p>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={autoRead}
+              onChange={(e) => setAutoRead(e.target.checked)}
+              className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <span className="text-sm text-gray-300">🔊 Lectura automática de respuestas</span>
+          </label>
         </div>
 
         {previewUrl && (
