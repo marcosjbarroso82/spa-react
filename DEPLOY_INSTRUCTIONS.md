@@ -48,7 +48,7 @@ npx gh-pages -d build
 ### 4. Verificar el Deploy
 
 Tu aplicación estará disponible en:
-- `https://TU-USUARIO-GITHUB.github.io/spa-react`
+- `https://marcosjbarroso82.github.io/spa-react`
 
 ### 5. Actualizaciones Futuras
 

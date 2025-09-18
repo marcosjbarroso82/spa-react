@@ -8,6 +8,10 @@ const TakePhoto: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
   const webcamRef = useRef<Webcam>(null);
 
+  // Referencias al MediaStream y a ImageCapture para fotos a resolución nativa
+  const streamRef = useRef<MediaStream | null>(null);
+  const imageCaptureRef = useRef<any>(null);
+
   const startCamera = () => {
     setError(null);
     setIsCameraOn(true);
@@ -15,9 +19,22 @@ const TakePhoto: React.FC = () => {
 
   const stopCamera = () => {
     setIsCameraOn(false);
+    try {
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    } catch {}
+    streamRef.current = null;
+    imageCaptureRef.current = null;
   };
 
-  const capturePhoto = useCallback(() => {
+  const blobToDataUrl = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+  const capturePhoto = useCallback(async () => {
     if (!webcamRef.current) {
       console.error('Webcam no está disponible');
       setError('La cámara no está disponible');
@@ -27,12 +44,32 @@ const TakePhoto: React.FC = () => {
     setIsCapturing(true);
     
     try {
+      // Intentar ImageCapture para obtener foto a resolución nativa
+      const track = streamRef.current?.getVideoTracks?.()[0];
+      if (track && 'ImageCapture' in window) {
+        if (!imageCaptureRef.current) {
+          // @ts-ignore ImageCapture no está tipado en TS DOM en algunos entornos
+          imageCaptureRef.current = new (window as any).ImageCapture(track);
+        }
+        try {
+          const blob: Blob = await imageCaptureRef.current.takePhoto();
+          const dataUrl = await blobToDataUrl(blob);
+          setPhoto(dataUrl);
+          setError(null);
+          console.log('Foto capturada a resolución nativa con ImageCapture');
+          return;
+        } catch (icErr) {
+          console.warn('Fallo ImageCapture, usando getScreenshot', icErr);
+        }
+      }
+
+      // Alternativa: captura desde el canvas de react-webcam
       const imageSrc = webcamRef.current.getScreenshot();
       
       if (imageSrc) {
         setPhoto(imageSrc);
         setError(null);
-        console.log('Foto capturada exitosamente');
+        console.log('Foto capturada con getScreenshot');
       } else {
         console.error('Error al capturar la foto');
         setError('Error al capturar la foto. Intenta de nuevo.');
@@ -60,9 +97,31 @@ const TakePhoto: React.FC = () => {
     setPhoto(null);
   };
 
-  const onUserMedia = (stream: MediaStream) => {
+  const onUserMedia = async (stream: MediaStream) => {
     console.log('Cámara conectada exitosamente');
     setError(null);
+    streamRef.current = stream;
+
+    try {
+      const track = stream.getVideoTracks()[0];
+      // Solicitar autoenfoque y ajustes continuos cuando sea posible (no estándar en TS)
+      await (track as any).applyConstraints({
+        advanced: [
+          { focusMode: 'continuous' },
+          { whiteBalanceMode: 'continuous' },
+          { exposureMode: 'continuous' }
+        ]
+      } as any).catch(() => {});
+
+      if ('ImageCapture' in window) {
+        try {
+          // @ts-ignore
+          imageCaptureRef.current = new (window as any).ImageCapture(track);
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('No se pudieron aplicar constraints avanzados:', e);
+    }
   };
 
   const onUserMediaError = (error: string | DOMException) => {
@@ -122,10 +181,12 @@ const TakePhoto: React.FC = () => {
               ref={webcamRef}
               audio={false}
               screenshotFormat="image/jpeg"
+              screenshotQuality={1}
               videoConstraints={{
-                facingMode: 'environment', // Usar cámara trasera en móviles
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 3840 },
+                height: { ideal: 2160 },
+                frameRate: { ideal: 30 }
               }}
               onUserMedia={onUserMedia}
               onUserMediaError={onUserMediaError}
