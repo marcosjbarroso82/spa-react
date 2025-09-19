@@ -82,7 +82,7 @@ export const defaultCameraConfig: CameraConfig = {
   },
   
   focus: {
-    distance: 0.3,            // 30cm - distancia típica celular-pantalla de notebook
+    distance: 0.4,            // 40cm - distancia típica celular-pantalla de notebook
     stabilizationTime: 2000,  // Tiempo de estabilización para pantallas (ms)
     
     // Configuraciones continuas (durante la visualización)
@@ -184,7 +184,7 @@ export const cameraPresets: Record<string, Partial<CameraConfig>> = {
       maxHeight: 720
     },
     focus: {
-      distance: 0.3,
+      distance: 0.4,
       stabilizationTime: 1000,
       continuousMode: {
         focusMode: 'continuous',
