@@ -38,7 +38,7 @@ const AnswerFromImage: React.FC = () => {
   });
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [isFocusing] = useState(false);
+  const [isFocusing, setIsFocusing] = useState(false);
   const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>([]);
   const [apiRequests, setApiRequests] = useState<ApiRequest[]>([]);
   const [modalImage, setModalImage] = useState<{ src: string; alt: string; title: string } | null>(null);
@@ -169,8 +169,33 @@ const AnswerFromImage: React.FC = () => {
     }
 
     setIsCapturing(true);
+    setIsFocusing(true);
     
     try {
+      // Intentar enfocar antes de capturar
+      if (streamRef.current) {
+        const track = streamRef.current.getVideoTracks()[0];
+        if (track) {
+          try {
+            // Aplicar constraints de enfoque single-shot
+            const focusConstraints = {
+              advanced: [
+                { focusMode: 'single-shot' },
+                { exposureMode: 'single-shot' },
+                { whiteBalanceMode: 'single-shot' }
+              ]
+            };
+            await (track as any).applyConstraints(focusConstraints as any);
+            
+            // Esperar un momento para que el enfoque se estabilice
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            console.log('Enfoque completado');
+          } catch (focusErr) {
+            console.warn('No se pudo aplicar enfoque:', focusErr);
+          }
+        }
+      }
+
       // Intentar ImageCapture para obtener foto a resolución nativa
       const track = streamRef.current?.getVideoTracks?.()[0];
       if (track && 'ImageCapture' in window) {
@@ -206,6 +231,7 @@ const AnswerFromImage: React.FC = () => {
       setError('Error al capturar la foto. Intenta de nuevo.');
     } finally {
       setIsCapturing(false);
+      setIsFocusing(false);
     }
   }, [addPhotoFromDataUrl]);
 

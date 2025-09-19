@@ -65,25 +65,25 @@ export interface CameraConfig {
   };
 }
 
-// Configuración por defecto optimizada para máxima resolución disponible
+// Configuración por defecto optimizada para preview de baja resolución
 export const defaultCameraConfig: CameraConfig = {
   resolution: {
-    width: 3840,        // Resolución 4K para máxima calidad disponible
-    height: 2160,       // Mantiene proporción 16:9 con máxima resolución
-    frameRate: 30,      // Frame rate estándar para mejor calidad
+    width: 1280,        // Resolución HD para preview
+    height: 720,        // Mantiene proporción 16:9
+    frameRate: 24,      // Frame rate reducido para mejor rendimiento
     aspectRatio: 16/9   // Proporción estándar para pantallas
   },
   
   quality: {
-    screenshotQuality: 0.85,  // Calidad alta para preservar detalles de texto pequeño
-    optimizationQuality: 0.8, // Calidad de optimización para OCR
+    screenshotQuality: 0.7,  // Calidad reducida para preview
+    optimizationQuality: 0.8, // Calidad alta para procesamiento OCR
     maxWidth: 2560,           // Resolución máxima para optimización
     maxHeight: 1440           // Resolución máxima para optimización
   },
   
   focus: {
     distance: 0.4,            // 40cm - distancia típica celular-pantalla de notebook
-    stabilizationTime: 2000,  // Tiempo de estabilización para pantallas (ms)
+    stabilizationTime: 1500,  // Tiempo de estabilización reducido (ms)
     
     // Configuraciones continuas (durante la visualización)
     continuousMode: {

@@ -108,14 +108,32 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, onClose }
     if (!videoRef.current || !canvasRef.current || isCapturing) return;
 
     setIsCapturing(true);
+    setIsStabilizing(true);
     
     try {
-      // Aplicar tiempo de estabilización antes de capturar
-      const stabilizationTime = cameraConfig.focus.stabilizationTime;
-      if (stabilizationTime > 0) {
-        setIsStabilizing(true);
-        await new Promise(resolve => setTimeout(resolve, stabilizationTime));
-        setIsStabilizing(false);
+      // Intentar enfocar antes de capturar
+      if (streamRef.current) {
+        const track = streamRef.current.getVideoTracks()[0];
+        if (track) {
+          try {
+            // Aplicar constraints de enfoque single-shot
+            const focusConstraints = {
+              advanced: [
+                { focusMode: 'single-shot' },
+                { exposureMode: 'single-shot' },
+                { whiteBalanceMode: 'single-shot' }
+              ]
+            };
+            await (track as any).applyConstraints(focusConstraints as any);
+            
+            // Esperar un momento para que el enfoque se estabilice
+            const stabilizationTime = cameraConfig.focus.stabilizationTime;
+            await new Promise(resolve => setTimeout(resolve, stabilizationTime));
+            console.log('Enfoque completado');
+          } catch (focusErr) {
+            console.warn('No se pudo aplicar enfoque:', focusErr);
+          }
+        }
       }
 
       const video = videoRef.current;
@@ -151,6 +169,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, onClose }
       setError('Error al capturar la imagen');
     } finally {
       setIsCapturing(false);
+      setIsStabilizing(false);
     }
   }, [isCapturing, cameraConfig.quality.screenshotQuality, cameraConfig.focus.stabilizationTime, onImageCapture, stopCamera]);
 

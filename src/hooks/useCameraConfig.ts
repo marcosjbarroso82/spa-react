@@ -74,14 +74,29 @@ export const useCameraConfig = () => {
     setConfig(defaultConfig);
   }, []);
 
-  // Obtener configuraciones de video constraints - siempre máxima resolución disponible
+  // Obtener configuraciones de video constraints - optimizado para preview
   const getVideoConstraints = useCallback(() => {
+    // Detectar si es móvil
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                     window.innerWidth <= 768;
+    
+    if (isMobile) {
+      // Configuración optimizada para preview en móviles
+      return {
+        facingMode: { ideal: 'environment' as const },
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 720, max: 1080 },
+        frameRate: { ideal: 24, max: 30 },
+        aspectRatio: { ideal: 16/9 }
+      };
+    }
+    
+    // Configuración para desktop
     return {
       facingMode: { ideal: 'environment' as const },
-      // Siempre usar máxima resolución disponible de la cámara
-      width: { ideal: 4096, max: 4096 },
-      height: { ideal: 4096, max: 4096 },
-      frameRate: { ideal: 60, max: 60 },
+      width: { ideal: 1920, max: 2560 },
+      height: { ideal: 1080, max: 1440 },
+      frameRate: { ideal: 30, max: 60 },
       aspectRatio: { ideal: 16/9 }
     };
   }, []);
