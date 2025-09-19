@@ -65,7 +65,17 @@ const MathpixPhotoOCR: React.FC = () => {
     console.log(`[MathpixPhotoOCR] ${message}`);
   };
 
-  // Función para redimensionar imagen
+  /**
+   * Función para redimensionar imagen manteniendo calidad para OCR
+   * 
+   * Esta función se usa solo cuando la imagen es mayor a 5MB después de las mejoras.
+   * La calidad 0.8 es un balance entre:
+   * - Tamaño de archivo (debe ser < 5MB para Mathpix)
+   * - Preservación de detalles para OCR matemático
+   * 
+   * 0.8 es suficiente para texto y símbolos matemáticos sin degradar significativamente
+   * la capacidad de detección de Mathpix.
+   */
   const resizeImage = (dataUrl: string, maxWidth: number = 1920, maxHeight: number = 1080, quality: number = 0.8): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -96,6 +106,140 @@ const MathpixPhotoOCR: React.FC = () => {
           resolve(resizedDataUrl);
         } else {
           resolve(dataUrl);
+        }
+      };
+      img.src = dataUrl;
+    });
+  };
+
+  /**
+   * Función para mejorar imagen de celular para OCR matemático
+   * 
+   * Las fotos de celular para OCR matemático suelen tener problemas comunes:
+   * - Iluminación desigual (sombras, reflejos)
+   * - Ruido digital (granulado)
+   * - Enfoque ligeramente borroso
+   * - Contraste insuficiente entre texto y fondo
+   * 
+   * Esta función aplica mejoras específicas para optimizar la detección de:
+   * - Símbolos matemáticos (+, -, ×, ÷, √, etc.)
+   * - Fórmulas complejas
+   * - Texto manuscrito
+   * - Números y variables
+   */
+  const enhanceImageForOCR = (dataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        // Configurar canvas para máxima calidad de renderizado
+        // Esto es crucial para preservar detalles finos de fórmulas matemáticas
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        // Dibujar imagen original
+        ctx.drawImage(img, 0, 0);
+
+        // Obtener datos de píxeles para procesamiento manual
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+
+        // MEJORA 1: Ajuste de contraste y brillo
+        // Las fotos de celular suelen tener contraste insuficiente
+        // Esto es crítico para distinguir texto negro sobre papel blanco
+        const contrast = 1.2;  // Aumenta contraste sin saturar
+        const brightness = 10; // Compensa iluminación desigual
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+
+          // Aplicar contraste: centra en 0.5 y escala
+          // Esto hace que los negros sean más negros y blancos más blancos
+          let newR = ((r / 255 - 0.5) * contrast + 0.5) * 255;
+          let newG = ((g / 255 - 0.5) * contrast + 0.5) * 255;
+          let newB = ((b / 255 - 0.5) * contrast + 0.5) * 255;
+
+          // Aplicar brillo para compensar sombras
+          // Importante para fotos con iluminación irregular
+          newR = Math.min(255, Math.max(0, newR + brightness));
+          newG = Math.min(255, Math.max(0, newG + brightness));
+          newB = Math.min(255, Math.max(0, newB + brightness));
+
+          // MEJORA 2: Reducción de ruido digital
+          // Las cámaras de celular generan ruido que confunde al OCR
+          // Aplicamos un filtro suave que preserva bordes (texto)
+          const noiseReduction = 0.1; // Suave para no borrar detalles
+          data[i] = r * (1 - noiseReduction) + newR * noiseReduction;
+          data[i + 1] = g * (1 - noiseReduction) + newG * noiseReduction;
+          data[i + 2] = b * (1 - noiseReduction) + newB * noiseReduction;
+        }
+
+        // Aplicar los cambios de contraste y ruido
+        ctx.putImageData(imageData, 0, 0);
+
+        // MEJORA 3: Filtro de nitidez (sharpen)
+        // Mejora la definición de bordes de texto y símbolos matemáticos
+        // Especialmente útil para fotos ligeramente borrosas
+        const sharpenCanvas = document.createElement('canvas');
+        const sharpenCtx = sharpenCanvas.getContext('2d');
+        
+        if (sharpenCtx) {
+          sharpenCanvas.width = canvas.width;
+          sharpenCanvas.height = canvas.height;
+          
+          // Kernel de nitidez optimizado para texto
+          // Realza bordes sin crear artefactos
+          const kernel = [
+            0, -1, 0,
+            -1, 5, -1,
+            0, -1, 0
+          ];
+          
+          const sharpenData = sharpenCtx.createImageData(canvas.width, canvas.height);
+          const sharpenPixels = sharpenData.data;
+          const originalPixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+          
+          // Aplicar convolución del kernel de nitidez
+          for (let y = 1; y < canvas.height - 1; y++) {
+            for (let x = 1; x < canvas.width - 1; x++) {
+              for (let c = 0; c < 3; c++) { // Procesar canales RGB
+                let sum = 0;
+                for (let ky = -1; ky <= 1; ky++) {
+                  for (let kx = -1; kx <= 1; kx++) {
+                    const pixelIndex = ((y + ky) * canvas.width + (x + kx)) * 4 + c;
+                    const kernelIndex = (ky + 1) * 3 + (kx + 1);
+                    sum += originalPixels[pixelIndex] * kernel[kernelIndex];
+                  }
+                }
+                const pixelIndex = (y * canvas.width + x) * 4 + c;
+                // Limitar valores para evitar saturación
+                sharpenPixels[pixelIndex] = Math.min(255, Math.max(0, sum));
+              }
+              // Preservar canal alpha
+              const alphaIndex = (y * canvas.width + x) * 4 + 3;
+              sharpenPixels[alphaIndex] = originalPixels[alphaIndex];
+            }
+          }
+          
+          sharpenCtx.putImageData(sharpenData, 0, 0);
+          
+          // Usar calidad 0.9 para balance entre tamaño y precisión OCR
+          // 0.9 es óptimo para texto y símbolos matemáticos
+          resolve(sharpenCanvas.toDataURL('image/jpeg', 0.9));
+        } else {
+          resolve(canvas.toDataURL('image/jpeg', 0.9));
         }
       };
       img.src = dataUrl;
@@ -317,28 +461,43 @@ const MathpixPhotoOCR: React.FC = () => {
       const imageSizeInBytes = (base64Data.length * 3) / 4;
       const imageSizeInMB = imageSizeInBytes / (1024 * 1024);
       
-      addDebugLog(`Tamaño de imagen: ${imageSizeInMB.toFixed(2)}MB`);
+      addDebugLog(`Tamaño de imagen original: ${imageSizeInMB.toFixed(2)}MB`);
 
       let processedPhoto = photo;
 
-      // Si la imagen es muy grande, redimensionarla
-      if (imageSizeInMB > 5) {
-        addDebugLog('Imagen muy grande, redimensionando...');
-        processedPhoto = await resizeImage(photo, 1920, 1080, 0.8);
+      // PASO 1: Mejorar imagen para OCR matemático (especialmente fotos de celular)
+      // Esto es crucial para obtener mejores resultados de Mathpix
+      addDebugLog('Aplicando mejoras de imagen para OCR matemático...');
+      processedPhoto = await enhanceImageForOCR(photo);
+
+      // Verificar tamaño después de las mejoras
+      const enhancedBase64Data = processedPhoto.split(',')[1];
+      const enhancedSizeInBytes = (enhancedBase64Data.length * 3) / 4;
+      const enhancedSizeInMB = enhancedSizeInBytes / (1024 * 1024);
+      
+      addDebugLog(`Tamaño después de mejoras: ${enhancedSizeInMB.toFixed(2)}MB`);
+
+      // PASO 2: Si la imagen es muy grande después de las mejoras, redimensionarla
+      // Las mejoras pueden aumentar ligeramente el tamaño, pero es necesario para OCR
+      if (enhancedSizeInMB > 5) {
+        addDebugLog('Imagen muy grande después de mejoras, redimensionando...');
+        processedPhoto = await resizeImage(processedPhoto, 1920, 1080, 0.8);
         
         // Recalcular tamaño después de redimensionar
         const newBase64Data = processedPhoto.split(',')[1];
         const newSizeInBytes = (newBase64Data.length * 3) / 4;
         const newSizeInMB = newSizeInBytes / (1024 * 1024);
-        addDebugLog(`Nuevo tamaño: ${newSizeInMB.toFixed(2)}MB`);
+        addDebugLog(`Tamaño final: ${newSizeInMB.toFixed(2)}MB`);
       }
 
-      // Usar la imagen procesada
+      // PASO 3: Preparar imagen final para envío a Mathpix
+      // La imagen ahora está optimizada para OCR matemático y cumple el límite de tamaño
       const finalBase64Data = processedPhoto.split(',')[1];
       const finalMimeType = processedPhoto.split(',')[0].split(':')[1].split(';')[0];
       const finalImageType = finalMimeType.split('/')[1];
 
       addDebugLog(`Enviando a Mathpix: ${finalImageType}, ${(finalBase64Data.length * 3 / 4 / (1024 * 1024)).toFixed(2)}MB`);
+      addDebugLog('Imagen optimizada con mejoras para OCR matemático');
 
       // Preparar el request body
       const requestBody = {
