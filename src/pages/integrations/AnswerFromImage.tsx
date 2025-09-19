@@ -2,8 +2,11 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import { useCredentials } from '../../hooks/useCredentials';
 import { useCameraConfig } from '../../hooks/useCameraConfig';
+import { useImageProcessing } from '../../hooks/useImageProcessing';
 import { ImageInfo } from '../../utils/imageUtils';
 import ImageDisplay from '../../components/ImageDisplay';
+import ImageComparison from '../../components/ImageComparison';
+import ImageModal from '../../components/ImageModal';
 import FileUpload from '../../components/FileUpload';
 import CameraPreview from '../../components/CameraPreview';
 import ProcessingControls from '../../components/ProcessingControls';
@@ -19,9 +22,12 @@ const HERRAMIENTAS_CON_RESPUESTAS_URL = 'http://localhost:3008/api/v1/prediction
 const AnswerFromImage: React.FC = () => {
   const { getCredentialByKey, isLoading: credentialsLoading } = useCredentials();
   const { getContinuousFocusConstraints } = useCameraConfig();
+  const { processImage, isProcessing: isImageProcessing } = useImageProcessing();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [imageInfo, setImageInfo] = useState<ImageInfo[]>([]);
+  const [processedImages, setProcessedImages] = useState<string[]>([]);
+  const [processedImageInfo, setProcessedImageInfo] = useState<ImageInfo[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrText, setOcrText] = useState<string | null>(null);
   const [lecturas, setLecturas] = useState<string[]>([]);
@@ -35,6 +41,7 @@ const AnswerFromImage: React.FC = () => {
   const [isFocusing] = useState(false);
   const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>([]);
   const [apiRequests, setApiRequests] = useState<ApiRequest[]>([]);
+  const [modalImage, setModalImage] = useState<{ src: string; alt: string; title: string } | null>(null);
   const webcamRef = useRef<Webcam>(null);
   const speechQueueRef = useRef<string[]>([]);
   const isSpeakingRef = useRef<boolean>(false);
@@ -44,6 +51,15 @@ const AnswerFromImage: React.FC = () => {
   const appId = getCredentialByKey('mathpix_app_id');
   const apiKey = getCredentialByKey('mathpix_api_key');
 
+  // Función para abrir modal de imagen
+  const openImageModal = (src: string, alt: string, title: string) => {
+    setModalImage({ src, alt, title });
+  };
+
+  // Función para cerrar modal
+  const closeImageModal = () => {
+    setModalImage(null);
+  };
 
   // Función para obtener información de la imagen (usando utilidad)
   const getImageInfo = useCallback(async (imageUrl: string): Promise<ImageInfo> => {
@@ -115,9 +131,14 @@ const AnswerFromImage: React.FC = () => {
 
   const addPhotoFromDataUrl = useCallback(async (dataUrl: string) => {
     try {
-      // Obtener información de la imagen
+      // Obtener información de la imagen original
       const info = await getImageInfo(dataUrl);
       setImageInfo(prev => [...prev, info]);
+      
+      // Procesar la imagen para OCR
+      const result = await processImage(dataUrl);
+      setProcessedImages(prev => [...prev, result.processedImage]);
+      setProcessedImageInfo(prev => [...prev, result.processedInfo]);
       
       // Convertir dataUrl a File
       fetch(dataUrl)
@@ -135,10 +156,10 @@ const AnswerFromImage: React.FC = () => {
           setError('Error al procesar la foto capturada');
         });
     } catch (err) {
-      console.error('Error al obtener información de la imagen:', err);
+      console.error('Error al procesar la imagen:', err);
       setError('Error al procesar la imagen capturada');
     }
-  }, [getImageInfo]);
+  }, [getImageInfo, processImage]);
 
   const capturePhoto = useCallback(async () => {
     if (!webcamRef.current) {
@@ -239,15 +260,21 @@ const AnswerFromImage: React.FC = () => {
       const url = URL.createObjectURL(file);
       setPreviewUrls(prev => [...prev, url]);
       
-      // Obtener información de la imagen
+      // Obtener información de la imagen original
       try {
         const info = await getImageInfo(url);
         setImageInfo(prev => [...prev, info]);
+        
+        // Procesar la imagen para OCR
+        const result = await processImage(url);
+        setProcessedImages(prev => [...prev, result.processedImage]);
+        setProcessedImageInfo(prev => [...prev, result.processedInfo]);
       } catch (err) {
-        console.error('Error al obtener información de la imagen:', err);
+        console.error('Error al procesar la imagen:', err);
+        setError('Error al procesar la imagen');
       }
     }
-  }, [getImageInfo]);
+  }, [getImageInfo, processImage]);
 
   const handleRemoveImage = (index: number) => {
     // Revocar URL de la imagen removida
@@ -257,6 +284,8 @@ const AnswerFromImage: React.FC = () => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
     setPreviewUrls(prev => prev.filter((_, i) => i !== index));
     setImageInfo(prev => prev.filter((_, i) => i !== index));
+    setProcessedImages(prev => prev.filter((_, i) => i !== index));
+    setProcessedImageInfo(prev => prev.filter((_, i) => i !== index));
     setOcrText(null);
     setLecturas([]);
     setError(null);
@@ -268,6 +297,8 @@ const AnswerFromImage: React.FC = () => {
     setSelectedFiles([]);
     setPreviewUrls([]);
     setImageInfo([]);
+    setProcessedImages([]);
+    setProcessedImageInfo([]);
     setOcrText(null);
     setLecturas([]);
     setError(null);
@@ -302,9 +333,20 @@ const AnswerFromImage: React.FC = () => {
       const ocrResults: string[] = [];
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
+        const processedImage = processedImages[i];
         console.log(`[AnswerFromImage] Procesando imagen ${i + 1}/${selectedFiles.length}`);
         
+        // Usar la imagen procesada si está disponible, sino la original
+        const imageToProcess = processedImage || previewUrls[i];
+        
         const base64 = await new Promise<string>((resolve, reject) => {
+          // Si es una data URL, extraer el base64 directamente
+          if (imageToProcess.startsWith('data:')) {
+            resolve(imageToProcess.split(',')[1]);
+            return;
+          }
+          
+          // Si es un archivo, usar FileReader
           const reader = new FileReader();
           reader.onload = () => {
             const result = reader.result as string;
@@ -625,27 +667,59 @@ const AnswerFromImage: React.FC = () => {
         {previewUrls.length > 0 && (
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-gray-300">Imágenes seleccionadas ({previewUrls.length}):</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {previewUrls.map((url, index) => (
-                <ImageDisplay
-                  key={index}
-                  imageSrc={url}
-                  imageInfo={imageInfo[index]}
-                  title={`Imagen ${index + 1}`}
-                  showInfo={true}
-                  maxHeight="max-h-48"
-                  actions={
-                    <button
-                      onClick={() => handleRemoveImage(index)}
-                      className="text-red-400 hover:text-red-300 text-sm"
-                      title="Remover imagen"
-                    >
-                      ✕ Remover
-                    </button>
-                  }
-                />
-              ))}
-            </div>
+            
+            {/* Mostrar comparación de imágenes si hay imágenes procesadas */}
+            {processedImages.length > 0 ? (
+              <div className="space-y-4">
+                {previewUrls.map((url, index) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-sm font-medium text-gray-300">Imagen {index + 1}</h5>
+                      <button
+                        onClick={() => handleRemoveImage(index)}
+                        className="text-red-400 hover:text-red-300 text-sm"
+                        title="Remover imagen"
+                      >
+                        ✕ Remover
+                      </button>
+                    </div>
+                    <ImageComparison
+                      originalImage={url}
+                      processedImage={processedImages[index]}
+                      originalInfo={imageInfo[index]}
+                      processedInfo={processedImageInfo[index]}
+                      onImageClick={(src, title) => openImageModal(src, title, title)}
+                      processing={isImageProcessing}
+                      showSizeReduction={true}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              /* Mostrar imágenes individuales si no hay procesadas */
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {previewUrls.map((url, index) => (
+                  <ImageDisplay
+                    key={index}
+                    imageSrc={url}
+                    imageInfo={imageInfo[index]}
+                    title={`Imagen ${index + 1}`}
+                    showInfo={true}
+                    maxHeight="max-h-48"
+                    actions={
+                      <button
+                        onClick={() => handleRemoveImage(index)}
+                        className="text-red-400 hover:text-red-300 text-sm"
+                        title="Remover imagen"
+                      >
+                        ✕ Remover
+                      </button>
+                    }
+                  />
+                ))}
+              </div>
+            )}
+            
             <ProcessingControls
               onProcess={process}
               onClear={handleClear}
@@ -693,6 +767,17 @@ const AnswerFromImage: React.FC = () => {
             ))}
           </ul>
         </div>
+      )}
+
+      {/* Modal de imagen */}
+      {modalImage && (
+        <ImageModal
+          isOpen={!!modalImage}
+          onClose={closeImageModal}
+          imageSrc={modalImage.src}
+          imageAlt={modalImage.alt}
+          title={modalImage.title}
+        />
       )}
     </div>
   );
