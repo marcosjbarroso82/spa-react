@@ -29,7 +29,16 @@ const AnswerFromImageUX: React.FC = () => {
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [cameraInitialized, setCameraInitialized] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isFocusing, setIsFocusing] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  
+  // Estados para debugging
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [imageInfo, setImageInfo] = useState<{
+    size: string;
+    dimensions: string;
+    format: string;
+  }[]>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const webcamRef = useRef<Webcam>(null);
@@ -45,6 +54,134 @@ const AnswerFromImageUX: React.FC = () => {
   const analizaEnunciadoUrl = getVariableByKey('ANALIZA_ENUNCIADO_URL');
   const ragConRespuestasUrl = getVariableByKey('RAG_CON_RESPUESTAS_URL');
   const herramientasConRespuestasUrl = getVariableByKey('HERRAMIENTAS_CON_RESPUESTAS_URL');
+  // Usar preferences.debug en lugar de variables
+  const isDebugMode = preferences.debug;
+  
+  // Log para verificar el estado del debug
+  useEffect(() => {
+    console.log('preferences.debug:', preferences.debug);
+    console.log('isDebugMode:', isDebugMode);
+  }, [preferences.debug, isDebugMode]);
+
+  // Función para agregar logs de debug
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugLogs(prev => [...prev.slice(-19), `[${timestamp}] ${message}`]);
+    console.log(`[AnswerFromImageUX] ${message}`);
+  };
+
+  // Función para redimensionar imagen
+  const resizeImage = (dataUrl: string, maxWidth: number = 1920, maxHeight: number = 1080, quality: number = 0.8): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+
+        // Calcular nuevas dimensiones manteniendo aspect ratio
+        if (width > height) {
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(resizedDataUrl);
+        } else {
+          resolve(dataUrl);
+        }
+      };
+      img.src = dataUrl;
+    });
+  };
+
+  // Función para obtener información de la imagen
+  const getImageInfo = (imageUrl: string) => {
+    // Verificar si es un data URL o una URL de objeto
+    const isDataUrl = imageUrl.startsWith('data:image/');
+    
+    let sizeInMB = 0;
+    let imageType = 'UNKNOWN';
+    
+    if (isDataUrl) {
+      // Para data URLs, extraer información del base64
+      const base64Data = imageUrl.split(',')[1];
+      if (!base64Data) {
+        return Promise.resolve({
+          size: '0.00 MB',
+          dimensions: '0 × 0',
+          format: 'UNKNOWN'
+        });
+      }
+      
+      const mimeType = imageUrl.split(',')[0].split(':')[1].split(';')[0];
+      imageType = mimeType.split('/')[1];
+      
+      // Calcular tamaño aproximado
+      const sizeInBytes = (base64Data.length * 3) / 4;
+      sizeInMB = sizeInBytes / (1024 * 1024);
+    } else {
+      // Para URLs de objeto, no podemos calcular el tamaño fácilmente
+      // Usaremos el tamaño del archivo si está disponible
+      imageType = 'JPEG'; // Asumimos JPEG para fotos capturadas
+    }
+    
+    // Obtener dimensiones
+    return new Promise<{size: string, dimensions: string, format: string}>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        resolve({
+          size: isDataUrl ? `${sizeInMB.toFixed(2)} MB` : 'Tamaño desconocido',
+          dimensions: `${img.width} × ${img.height}`,
+          format: imageType.toUpperCase()
+        });
+      };
+      img.onerror = () => {
+        resolve({
+          size: isDataUrl ? `${sizeInMB.toFixed(2)} MB` : 'Tamaño desconocido',
+          dimensions: '0 × 0',
+          format: imageType.toUpperCase()
+        });
+      };
+      img.src = imageUrl;
+    });
+  };
+
+  // Función para enfocar la cámara
+  const focusCamera = useCallback(async (): Promise<boolean> => {
+    if (!streamRef.current) return false;
+
+    try {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (!track) return false;
+
+      // Aplicar constraints de enfoque
+      await track.applyConstraints({
+        advanced: [
+          { focusMode: 'single-shot' },
+          { focusDistance: 0.1 }
+        ]
+      } as any);
+
+      addDebugLog('Enfoque aplicado');
+      return true;
+    } catch (error) {
+      addDebugLog(`Error al enfocar: ${error}`);
+      return false;
+    }
+  }, []);
 
   const canProcess = useMemo(() => 
     selectedFiles.length > 0 && 
@@ -92,6 +229,25 @@ const AnswerFromImageUX: React.FC = () => {
     processSpeechQueue();
   };
 
+  // Funciones de cámara
+  const startCamera = useCallback(() => {
+    setError(null);
+    setIsCameraOn(true);
+    setCameraInitialized(false);
+    addDebugLog('Iniciando cámara...');
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    setIsCameraOn(false);
+    setCameraInitialized(false);
+    try {
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    } catch {}
+    streamRef.current = null;
+    imageCaptureRef.current = null;
+    addDebugLog('Cámara detenida');
+  }, []);
+
   // Inicializar preferencias cuando se cargan
   useEffect(() => {
     if (!preferencesLoading) {
@@ -107,24 +263,7 @@ const AnswerFromImageUX: React.FC = () => {
     } else if (inputMode === 'file' && isCameraOn) {
       stopCamera();
     }
-  }, [inputMode, isCameraOn]);
-
-  // Funciones de cámara
-  const startCamera = () => {
-    setError(null);
-    setIsCameraOn(true);
-    setCameraInitialized(false);
-  };
-
-  const stopCamera = () => {
-    setIsCameraOn(false);
-    setCameraInitialized(false);
-    try {
-      streamRef.current?.getTracks().forEach(t => t.stop());
-    } catch {}
-    streamRef.current = null;
-    imageCaptureRef.current = null;
-  };
+  }, [inputMode, isCameraOn, startCamera, stopCamera]);
 
   const blobToDataUrl = (blob: Blob): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -134,16 +273,66 @@ const AnswerFromImageUX: React.FC = () => {
       reader.readAsDataURL(blob);
     });
 
+  const addPhotoFromDataUrl = useCallback(async (dataUrl: string) => {
+    try {
+      // Obtener información de la imagen
+      const info = await getImageInfo(dataUrl);
+      setImageInfo(prev => [...prev, info]);
+      addDebugLog(`Imagen agregada: ${info.dimensions}, ${info.size}`);
+
+      // Verificar si la imagen es muy grande y redimensionarla si es necesario
+      const base64Data = dataUrl.split(',')[1];
+      const imageSizeInBytes = (base64Data.length * 3) / 4;
+      const imageSizeInMB = imageSizeInBytes / (1024 * 1024);
+      
+      let processedDataUrl = dataUrl;
+      if (imageSizeInMB > 5) {
+        addDebugLog(`Imagen muy grande (${imageSizeInMB.toFixed(2)}MB), redimensionando...`);
+        processedDataUrl = await resizeImage(dataUrl, 1920, 1080, 0.8);
+        addDebugLog('Imagen redimensionada');
+      }
+
+      fetch(processedDataUrl)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          setSelectedFiles(prev => [...prev, file]);
+          setPreviewUrls(prev => [...prev, processedDataUrl]);
+          setOcrText(null);
+          setLecturas([]);
+          setError(null);
+          setShowResults(false);
+        })
+        .catch(err => {
+          addDebugLog(`Error al convertir foto a archivo: ${err}`);
+          setError('Error al procesar la foto capturada');
+        });
+    } catch (err) {
+      addDebugLog(`Error al procesar imagen: ${err}`);
+      setError('Error al procesar la imagen capturada');
+    }
+  }, []);
+
   const capturePhoto = useCallback(async () => {
     if (!webcamRef.current) {
-      console.error('Webcam no está disponible');
+      addDebugLog('Error: Webcam no disponible');
       setError('La cámara no está disponible');
       return;
     }
 
     setIsCapturing(true);
+    setIsFocusing(true);
+    addDebugLog('Iniciando captura de foto...');
     
     try {
+      // Intentar enfocar antes de capturar
+      const focused = await focusCamera();
+      if (focused) {
+        // Esperar un momento para que el enfoque se estabilice
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        addDebugLog('Enfoque completado');
+      }
+
       // Intentar ImageCapture para obtener foto a resolución nativa
       const track = streamRef.current?.getVideoTracks?.()[0];
       if (track && 'ImageCapture' in window) {
@@ -155,10 +344,10 @@ const AnswerFromImageUX: React.FC = () => {
           const dataUrl = await blobToDataUrl(blob);
           addPhotoFromDataUrl(dataUrl);
           setError(null);
-          console.log('Foto capturada a resolución nativa con ImageCapture');
+          addDebugLog('Foto capturada a resolución nativa con ImageCapture');
           return;
         } catch (icErr) {
-          console.warn('Fallo ImageCapture, usando getScreenshot', icErr);
+          addDebugLog(`ImageCapture falló: ${icErr}`);
         }
       }
 
@@ -168,39 +357,21 @@ const AnswerFromImageUX: React.FC = () => {
       if (imageSrc) {
         addPhotoFromDataUrl(imageSrc);
         setError(null);
-        console.log('Foto capturada con getScreenshot');
+        addDebugLog('Foto capturada con getScreenshot');
       } else {
-        console.error('Error al capturar la foto');
-        setError('Error al capturar la foto. Intenta de nuevo.');
+        throw new Error('No se pudo capturar la imagen');
       }
     } catch (err) {
-      console.error('Error durante la captura:', err);
-      setError('Error al capturar la foto. Intenta de nuevo.');
+      addDebugLog(`Error durante captura: ${err}`);
+      setError(err instanceof Error ? err.message : 'Error al capturar la foto. Intenta de nuevo.');
     } finally {
       setIsCapturing(false);
+      setIsFocusing(false);
     }
-  }, []);
-
-  const addPhotoFromDataUrl = (dataUrl: string) => {
-    fetch(dataUrl)
-      .then(res => res.blob())
-      .then(blob => {
-        const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
-        setSelectedFiles(prev => [...prev, file]);
-        setPreviewUrls(prev => [...prev, dataUrl]);
-        setOcrText(null);
-        setLecturas([]);
-        setError(null);
-        setShowResults(false);
-      })
-      .catch(err => {
-        console.error('Error al convertir foto a archivo:', err);
-        setError('Error al procesar la foto capturada');
-      });
-  };
+  }, [focusCamera, addPhotoFromDataUrl]);
 
   const onUserMedia = async (stream: MediaStream) => {
-    console.log('Cámara conectada exitosamente');
+    addDebugLog('Cámara conectada exitosamente');
     setError(null);
     streamRef.current = stream;
     setCameraInitialized(true);
@@ -218,15 +389,16 @@ const AnswerFromImageUX: React.FC = () => {
       if ('ImageCapture' in window) {
         try {
           imageCaptureRef.current = new (window as any).ImageCapture(track);
+          addDebugLog('ImageCapture inicializado');
         } catch {}
       }
     } catch (e) {
-      console.warn('No se pudieron aplicar constraints avanzados:', e);
+      addDebugLog(`No se pudieron aplicar constraints avanzados: ${e}`);
     }
   };
 
   const onUserMediaError = (error: string | DOMException) => {
-    console.error('Error de cámara:', error);
+    addDebugLog(`Error de cámara: ${error}`);
     setError('No se pudo acceder a la cámara. Verifica los permisos.');
   };
 
@@ -252,6 +424,30 @@ const AnswerFromImageUX: React.FC = () => {
     const url = URL.createObjectURL(file);
     setPreviewUrls(prev => [...prev, url]);
     
+    // Obtener información de la imagen usando el archivo directamente
+    const fileSizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+    const fileType = file.type.split('/')[1]?.toUpperCase() || 'UNKNOWN';
+    
+    // Crear información básica del archivo
+    const fileInfo = {
+      size: `${fileSizeInMB} MB`,
+      dimensions: 'Cargando...',
+      format: fileType
+    };
+    
+    setImageInfo(prev => [...prev, fileInfo]);
+    addDebugLog(`Archivo agregado: ${fileSizeInMB}MB, tipo: ${fileType}`);
+    
+    // Obtener dimensiones de la imagen
+    getImageInfo(url).then(info => {
+      setImageInfo(prev => prev.map((item, index) => 
+        index === prev.length - 1 ? { ...item, dimensions: info.dimensions } : item
+      ));
+      addDebugLog(`Dimensiones obtenidas: ${info.dimensions}`);
+    }).catch(err => {
+      addDebugLog(`Error al obtener dimensiones: ${err}`);
+    });
+    
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -261,21 +457,25 @@ const AnswerFromImageUX: React.FC = () => {
     URL.revokeObjectURL(previewUrls[index]);
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
     setPreviewUrls(prev => prev.filter((_, i) => i !== index));
+    setImageInfo(prev => prev.filter((_, i) => i !== index));
     setOcrText(null);
     setLecturas([]);
     setError(null);
     setShowResults(false);
+    addDebugLog(`Imagen ${index + 1} eliminada`);
   };
 
   const handleClear = () => {
     previewUrls.forEach(url => URL.revokeObjectURL(url));
     setSelectedFiles([]);
     setPreviewUrls([]);
+    setImageInfo([]);
     setOcrText(null);
     setLecturas([]);
     setError(null);
     setShowResults(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    addDebugLog('Todas las imágenes eliminadas');
   };
 
   const handleCancel = () => {
@@ -284,6 +484,7 @@ const AnswerFromImageUX: React.FC = () => {
     setLecturas([]);
     setError(null);
     setShowResults(false);
+    addDebugLog('Procesamiento cancelado');
   };
 
   const handleRestart = () => {
@@ -291,6 +492,7 @@ const AnswerFromImageUX: React.FC = () => {
     setInputMode('file');
     setIsCameraOn(false);
     stopCamera();
+    addDebugLog('Proceso reiniciado');
   };
 
   const process = async () => {
@@ -301,12 +503,12 @@ const AnswerFromImageUX: React.FC = () => {
     setShowResults(false);
 
     try {
-      console.log(`[AnswerFromImageUX] Procesando ${selectedFiles.length} imágenes`);
+      addDebugLog(`Procesando ${selectedFiles.length} imágenes`);
       
       const ocrResults: string[] = [];
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
-        console.log(`[AnswerFromImageUX] Procesando imagen ${i + 1}/${selectedFiles.length}`);
+        addDebugLog(`Procesando imagen ${i + 1}/${selectedFiles.length}`);
         
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -317,6 +519,8 @@ const AnswerFromImageUX: React.FC = () => {
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
+
+        addDebugLog(`Enviando imagen ${i + 1} a Mathpix`);
 
         const mathpixRes = await fetch('https://api.mathpix.com/v3/text', {
           method: 'POST',
@@ -331,6 +535,8 @@ const AnswerFromImageUX: React.FC = () => {
           }),
         });
         
+        addDebugLog(`Mathpix respuesta imagen ${i + 1}: ${mathpixRes.status} ${mathpixRes.statusText}`);
+        
         if (!mathpixRes.ok) {
           const errData = await mathpixRes.json().catch(() => ({}));
           throw new Error(errData.error || `Mathpix error ${mathpixRes.status} en imagen ${i + 1}`);
@@ -338,25 +544,25 @@ const AnswerFromImageUX: React.FC = () => {
         
         const mathpixData = await mathpixRes.json();
         const text: string = mathpixData?.text || '';
-        console.log(`[AnswerFromImageUX] OCR ${i + 1} texto:`, text);
+        addDebugLog(`OCR ${i + 1} texto: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
         
         if (text.trim()) {
           ocrResults.push(`OCR ${i + 1}: ${text}`);
         } else {
-          console.warn(`[AnswerFromImageUX] Imagen ${i + 1} no devolvió texto`);
+          addDebugLog(`Imagen ${i + 1} no devolvió texto`);
           ocrResults.push(`OCR ${i + 1}: [Sin texto reconocido]`);
         }
       }
       
       const compiledText = ocrResults.join('\n\n');
       setOcrText(compiledText);
-      console.log('[AnswerFromImageUX] Texto compaginado:', compiledText);
+      addDebugLog(`Texto compilado: ${compiledText.substring(0, 200)}${compiledText.length > 200 ? '...' : ''}`);
       
       if (!compiledText.trim()) {
         throw new Error('Ninguna imagen devolvió texto');
       }
 
-      console.log('[AnswerFromImageUX] Llamando Flowise: Analiza Enunciado');
+      addDebugLog('Llamando Flowise: Analiza Enunciado');
       const analizaRes = await fetch(analizaEnunciadoUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -364,7 +570,7 @@ const AnswerFromImageUX: React.FC = () => {
       });
       const analizaContentType = analizaRes.headers.get('content-type') || '';
       const analizaData: FlowiseResponse = analizaContentType.includes('application/json') ? await analizaRes.json() : await analizaRes.text();
-      console.log('[AnswerFromImageUX] Analiza Enunciado status', analizaRes.status, 'body', analizaData);
+      addDebugLog(`Analiza Enunciado status: ${analizaRes.status}`);
 
       const agentDataList: any[] = (analizaData as any)?.response?.agentFlowExecutedData
         ?? (analizaData as any)?.agentFlowExecutedData
@@ -384,7 +590,7 @@ const AnswerFromImageUX: React.FC = () => {
         throw new Error('No se encontró output en Analiza Enunciado');
       }
 
-      console.log('[AnswerFromImageUX] Fan-out a RAG y Herramientas con output:', outputToSend);
+      addDebugLog(`Fan-out a RAG y Herramientas con output: ${outputToSend.substring(0, 100)}${outputToSend.length > 100 ? '...' : ''}`);
       const payload = JSON.stringify({ question: outputToSend });
 
       const [ragRes, toolsRes] = await Promise.all([
@@ -396,8 +602,7 @@ const AnswerFromImageUX: React.FC = () => {
       const ragData: FlowiseResponse = ragCt.includes('application/json') ? await ragRes.json() : await ragRes.text();
       const toolsData: FlowiseResponse = toolsCt.includes('application/json') ? await toolsRes.json() : await toolsRes.text();
 
-      console.log('[AnswerFromImageUX] RAG status', ragRes.status, 'body', ragData);
-      console.log('[AnswerFromImageUX] Herramientas status', toolsRes.status, 'body', toolsData);
+      addDebugLog(`RAG status: ${ragRes.status}, Herramientas status: ${toolsRes.status}`);
 
       const extractLectura = (data: any): string | null => {
         const list = data?.response?.agentFlowExecutedData ?? data?.agentFlowExecutedData;
@@ -422,15 +627,18 @@ const AnswerFromImageUX: React.FC = () => {
       setLecturas(collected);
 
       if (l1) {
+        addDebugLog(`RAG lectura: ${l1.substring(0, 100)}${l1.length > 100 ? '...' : ''}`);
         queueSpeech(`RAG con Respuestas: ${l1}`);
       }
       if (l2) {
+        addDebugLog(`Herramientas lectura: ${l2.substring(0, 100)}${l2.length > 100 ? '...' : ''}`);
         queueSpeech(`Herramientas con Respuestas: ${l2}`);
       }
 
+      addDebugLog('Procesamiento completado exitosamente');
       setShowResults(true);
     } catch (err) {
-      console.error('[AnswerFromImageUX] Error en el proceso', err);
+      addDebugLog(`Error en el proceso: ${err}`);
       setError(err instanceof Error ? err.message : 'Error en el proceso');
     } finally {
       setIsProcessing(false);
@@ -474,6 +682,11 @@ const AnswerFromImageUX: React.FC = () => {
         <div className="text-6xl mb-4">🖼️</div>
         <h2 className="text-2xl font-semibold mb-2 text-blue-400">Contestar por Imagen UX</h2>
         <p className="text-gray-300">Sube imágenes o toma fotos, las procesamos con Mathpix OCR y consultamos Flowise.</p>
+        {isDebugMode && (
+          <div className="mt-2 px-3 py-1 bg-green-600 text-white text-sm rounded-full inline-block">
+            🐛 Debug Mode Activado
+          </div>
+        )}
       </div>
 
       <div className="bg-gray-700 rounded-lg p-6 space-y-4">
@@ -502,7 +715,11 @@ const AnswerFromImageUX: React.FC = () => {
                 disabled={isCapturing || !cameraInitialized}
                 className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors duration-200 flex items-center gap-2 text-lg"
               >
-                {isCapturing ? '📸 Capturando...' : '📸 Tomar Foto'}
+                {isCapturing ? (
+                  isFocusing ? '🎯 Enfocando...' : '📸 Capturando...'
+                ) : (
+                  '📸 Tomar Foto'
+                )}
               </button>
             </div>
             
@@ -534,34 +751,77 @@ const AnswerFromImageUX: React.FC = () => {
           </div>
         )}
 
-
-        {/* Preview de imágenes - Solo en modo debug */}
-        {preferences.debug && previewUrls.length > 0 && (
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-300">🐛 Imágenes seleccionadas ({previewUrls.length}):</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {previewUrls.map((url, index) => (
-                <div key={index} className="relative space-y-2">
-                  <div className="flex justify-between items-center">
-                    <div className="text-xs text-gray-400">Imagen {index + 1}</div>
-                    <button
-                      onClick={() => handleRemoveImage(index)}
-                      className="text-red-400 hover:text-red-300 text-sm"
-                      title="Remover imagen"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <img 
-                    src={url} 
-                    alt={`Preview ${index + 1}`} 
-                    className="w-full max-h-48 object-contain rounded-lg border border-gray-500" 
-                  />
-                </div>
-              ))}
+        {/* Información de debug - Solo si DEBUG_MODE está configurado */}
+        {isDebugMode && (
+          <div className="space-y-4">
+            {/* Debug Info */}
+            <div className="bg-gray-800 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-300 mb-2">🐛 Debug Info:</h4>
+              <div className="text-xs text-gray-400 space-y-1 max-h-32 overflow-y-auto">
+                {debugLogs.map((log, index) => (
+                  <div key={index}>{log}</div>
+                ))}
+              </div>
             </div>
+
+            {/* Información de imágenes */}
+            {imageInfo.length > 0 && (
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-gray-300 mb-2">📊 Información de Imágenes:</h4>
+                <div className="space-y-2">
+                  {imageInfo.map((info, index) => (
+                    <div key={index} className="bg-gray-700 rounded p-2">
+                      <div className="text-xs text-gray-400 mb-1">Imagen {index + 1}</div>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-400">Tamaño:</span>
+                          <div className="text-white font-medium">{info.size}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Dimensiones:</span>
+                          <div className="text-white font-medium">{info.dimensions}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Formato:</span>
+                          <div className="text-white font-medium">{info.format}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Preview de imágenes - Siempre visible */}
+            {previewUrls.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-gray-300">🖼️ Imágenes seleccionadas ({previewUrls.length}):</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {previewUrls.map((url, index) => (
+                    <div key={index} className="relative space-y-2">
+                      <div className="flex justify-between items-center">
+                        <div className="text-xs text-gray-400">Imagen {index + 1}</div>
+                        <button
+                          onClick={() => handleRemoveImage(index)}
+                          className="text-red-400 hover:text-red-300 text-sm"
+                          title="Remover imagen"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <img 
+                        src={url} 
+                        alt={`Preview ${index + 1}`} 
+                        className="w-full max-h-48 object-contain rounded-lg border border-gray-500" 
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
+
 
         {/* Botones de acción */}
         {!showResults && (
@@ -608,7 +868,7 @@ const AnswerFromImageUX: React.FC = () => {
       {showResults && (
         <div className="space-y-4">
           {/* Texto OCR - Solo en modo debug */}
-          {preferences.debug && ocrText && (
+          {isDebugMode && ocrText && (
             <div className="bg-gray-700 rounded-lg p-4">
               <h3 className="text-lg font-medium text-white mb-2">🐛 Texto OCR</h3>
               <div className="bg-gray-800 rounded p-3 font-mono text-sm text-white whitespace-pre-wrap">{ocrText}</div>
