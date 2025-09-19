@@ -5,6 +5,7 @@ import TakePhoto from './integrations/TakePhoto';
 import MathpixOCR from './integrations/MathpixOCR';
 import FlowiseTester from './integrations/FlowiseTester';
 import AnswerFromImage from './integrations/AnswerFromImage';
+import AnswerFromImageUX from './integrations/AnswerFromImageUX';
 
 const Integrations: React.FC = () => {
   const location = useLocation();
@@ -15,6 +16,7 @@ const Integrations: React.FC = () => {
     { path: '/integrations/mathpix-ocr', label: 'Mathpix OCR', icon: '📐', description: 'Reconocimiento óptico de matemáticas' },
     { path: '/integrations/flowise-tester', label: 'Flowise Tester', icon: '🤖', description: 'Probar endpoints de Flowise' },
     { path: '/integrations/answer-from-image', label: 'Contestar por Imagen', icon: '🖼️', description: 'OCR con Mathpix y análisis con Flowise' },
+    { path: '/integrations/answer-from-image-ux', label: 'Contestar por Imagen UX', icon: '✨', description: 'Versión mejorada con mejor experiencia de usuario' },
   ];
 
   return (
@@ -66,6 +68,7 @@ const Integrations: React.FC = () => {
             <Route path="/mathpix-ocr" element={<MathpixOCR />} />
             <Route path="/flowise-tester" element={<FlowiseTester />} />
             <Route path="/answer-from-image" element={<AnswerFromImage />} />
+            <Route path="/answer-from-image-ux" element={<AnswerFromImageUX />} />
           </Routes>
         </div>
       </div>
