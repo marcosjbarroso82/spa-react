@@ -28,6 +28,7 @@ const AnswerFromImageUX: React.FC = () => {
     return saved === 'true';
   });
   const [isCameraOn, setIsCameraOn] = useState(false);
+  const [cameraInitialized, setCameraInitialized] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [showResults, setShowResults] = useState(false);
   
@@ -96,14 +97,25 @@ const AnswerFromImageUX: React.FC = () => {
     localStorage.setItem('answerFromImageUX_autoRead', autoRead.toString());
   }, [autoRead]);
 
+  // Activar cámara automáticamente cuando se selecciona modo cámara
+  useEffect(() => {
+    if (inputMode === 'camera' && !isCameraOn) {
+      startCamera();
+    } else if (inputMode === 'file' && isCameraOn) {
+      stopCamera();
+    }
+  }, [inputMode, isCameraOn]);
+
   // Funciones de cámara
   const startCamera = () => {
     setError(null);
     setIsCameraOn(true);
+    setCameraInitialized(false);
   };
 
   const stopCamera = () => {
     setIsCameraOn(false);
+    setCameraInitialized(false);
     try {
       streamRef.current?.getTracks().forEach(t => t.stop());
     } catch {}
@@ -188,6 +200,7 @@ const AnswerFromImageUX: React.FC = () => {
     console.log('Cámara conectada exitosamente');
     setError(null);
     streamRef.current = stream;
+    setCameraInitialized(true);
 
     try {
       const track = stream.getVideoTracks()[0];
@@ -494,58 +507,41 @@ const AnswerFromImageUX: React.FC = () => {
         ) : (
           <div className="space-y-3">
             <label className="block text-sm font-medium text-gray-300 mb-2">📷 Tomar foto</label>
-            <div className="flex gap-2">
-              {!isCameraOn ? (
-                <button
-                  onClick={startCamera}
-                  className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded text-sm transition-colors duration-200"
-                >
-                  📹 Activar Cámara
-                </button>
-              ) : (
-                <button
-                  onClick={stopCamera}
-                  className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded text-sm transition-colors duration-200"
-                >
-                  📹 Desactivar
-                </button>
-              )}
+            
+            {/* Solo mostrar el botón de tomar foto */}
+            <div className="flex justify-center">
+              <button
+                onClick={capturePhoto}
+                disabled={isCapturing || !cameraInitialized}
+                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors duration-200 flex items-center gap-2 text-lg"
+              >
+                {isCapturing ? '📸 Capturando...' : '📸 Tomar Foto'}
+              </button>
             </div>
-            <p className="text-xs text-gray-400">Usa la cámara de tu dispositivo</p>
+            
+            {!cameraInitialized && isCameraOn && (
+              <p className="text-center text-sm text-gray-400">Inicializando cámara...</p>
+            )}
+            
+            <p className="text-xs text-gray-400 text-center">Usa la cámara de tu dispositivo</p>
 
-            {/* Cámara */}
+            {/* Cámara oculta - solo para funcionalidad */}
             {isCameraOn && (
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-gray-300">Cámara activa:</h4>
-                <div className="relative bg-black rounded-lg overflow-hidden">
-                  <Webcam
-                    ref={webcamRef}
-                    audio={false}
-                    screenshotFormat="image/jpeg"
-                    screenshotQuality={1}
-                    videoConstraints={{
-                      facingMode: { ideal: 'environment' },
-                      width: { ideal: 3840 },
-                      height: { ideal: 2160 },
-                      frameRate: { ideal: 30 }
-                    }}
-                    onUserMedia={onUserMedia}
-                    onUserMediaError={onUserMediaError}
-                    className="w-full h-auto max-h-64 object-cover"
-                  />
-                  <div className="absolute top-4 right-4">
-                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                  </div>
-                </div>
-                <div className="flex justify-center">
-                  <button
-                    onClick={capturePhoto}
-                    disabled={isCapturing}
-                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors duration-200 flex items-center gap-2"
-                  >
-                    {isCapturing ? '📸 Capturando...' : '📸 Tomar Foto'}
-                  </button>
-                </div>
+              <div className="hidden">
+                <Webcam
+                  ref={webcamRef}
+                  audio={false}
+                  screenshotFormat="image/jpeg"
+                  screenshotQuality={1}
+                  videoConstraints={{
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 3840 },
+                    height: { ideal: 2160 },
+                    frameRate: { ideal: 30 }
+                  }}
+                  onUserMedia={onUserMedia}
+                  onUserMediaError={onUserMediaError}
+                />
               </div>
             )}
           </div>
