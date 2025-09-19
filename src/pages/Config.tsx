@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCredentials } from '../hooks/useCredentials';
 import { useVariables } from '../hooks/useVariables';
+import { usePreferences } from '../hooks/usePreferences';
 
 const Config: React.FC = () => {
   const { 
@@ -22,6 +23,13 @@ const Config: React.FC = () => {
     removeVariable,
     clearVariables
   } = useVariables();
+  
+  const {
+    preferences,
+    isLoading: preferencesLoading,
+    updatePreference,
+    resetPreferences
+  } = usePreferences();
   
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -99,7 +107,17 @@ const Config: React.FC = () => {
     setMessage(null);
   };
 
-  if (isLoading || variablesLoading) {
+  const handlePreferenceChange = (key: 'imageInputMode' | 'autoRead', value: any) => {
+    updatePreference(key, value);
+    setMessage({ type: 'success', text: 'Configuración actualizada' });
+  };
+
+  const handleResetPreferences = () => {
+    resetPreferences();
+    setMessage({ type: 'success', text: 'Configuración restablecida a valores por defecto' });
+  };
+
+  if (isLoading || variablesLoading || preferencesLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-white text-lg">Cargando...</div>
@@ -124,6 +142,58 @@ const Config: React.FC = () => {
               {message.text}
             </div>
           )}
+
+          {/* Sección de Configuración */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">⚙️ Configuración</h2>
+            <div className="bg-gray-700 rounded-lg p-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Modo de entrada de imagen */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Modo de entrada de imagen
+                  </label>
+                  <select
+                    value={preferences.imageInputMode}
+                    onChange={(e) => handlePreferenceChange('imageInputMode', e.target.value as 'file' | 'camera')}
+                    className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="file">📁 Cargar archivo de imagen</option>
+                    <option value="camera">📷 Tomar foto con cámara</option>
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">Selecciona el modo predeterminado para ingresar imágenes</p>
+                </div>
+
+                {/* Lectura automática */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Lectura automática
+                  </label>
+                  <div className="flex items-center space-x-3">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={preferences.autoRead}
+                        onChange={(e) => handlePreferenceChange('autoRead', e.target.checked)}
+                        className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                      <span className="text-sm text-gray-300">🔊 Activar lectura automática de respuestas</span>
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">Lee automáticamente las respuestas con síntesis de voz</p>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={handleResetPreferences}
+                  className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-sm"
+                >
+                  🔄 Restablecer Configuración
+                </button>
+              </div>
+            </div>
+          </div>
 
           {/* Sección de Variables */}
           <div className="mb-8">
@@ -294,7 +364,15 @@ const Config: React.FC = () => {
           {/* Información adicional */}
           <div className="mt-6 p-4 bg-gray-700 rounded-lg">
             <h3 className="text-sm font-medium text-gray-300 mb-2">ℹ️ Información</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <h4 className="text-xs font-medium text-gray-300 mb-1">Configuración</h4>
+                <ul className="text-xs text-gray-400 space-y-1">
+                  <li>• Modo de entrada predeterminado</li>
+                  <li>• Lectura automática de respuestas</li>
+                  <li>• Se guarda en localStorage</li>
+                </ul>
+              </div>
               <div>
                 <h4 className="text-xs font-medium text-gray-300 mb-1">Variables</h4>
                 <ul className="text-xs text-gray-400 space-y-1">

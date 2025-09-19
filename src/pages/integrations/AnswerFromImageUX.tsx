@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import Webcam from 'react-webcam';
 import { useCredentials } from '../../hooks/useCredentials';
 import { useVariables } from '../../hooks/useVariables';
+import { usePreferences } from '../../hooks/usePreferences';
 
 interface FlowiseResponse {
   response?: {
@@ -16,6 +17,7 @@ type InputMode = 'file' | 'camera';
 const AnswerFromImageUX: React.FC = () => {
   const { getCredentialByKey, isLoading: credentialsLoading } = useCredentials();
   const { getVariableByKey, isLoading: variablesLoading } = useVariables();
+  const { preferences, isLoading: preferencesLoading } = usePreferences();
   const [inputMode, setInputMode] = useState<InputMode>('file');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
@@ -23,10 +25,7 @@ const AnswerFromImageUX: React.FC = () => {
   const [ocrText, setOcrText] = useState<string | null>(null);
   const [lecturas, setLecturas] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [autoRead, setAutoRead] = useState<boolean>(() => {
-    const saved = localStorage.getItem('answerFromImageUX_autoRead');
-    return saved === 'true';
-  });
+  const [autoRead, setAutoRead] = useState<boolean>(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [cameraInitialized, setCameraInitialized] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -55,8 +54,9 @@ const AnswerFromImageUX: React.FC = () => {
     !!ragConRespuestasUrl && 
     !!herramientasConRespuestasUrl && 
     !credentialsLoading && 
-    !variablesLoading, 
-    [selectedFiles, appId, apiKey, analizaEnunciadoUrl, ragConRespuestasUrl, herramientasConRespuestasUrl, credentialsLoading, variablesLoading]
+    !variablesLoading && 
+    !preferencesLoading, 
+    [selectedFiles, appId, apiKey, analizaEnunciadoUrl, ragConRespuestasUrl, herramientasConRespuestasUrl, credentialsLoading, variablesLoading, preferencesLoading]
   );
 
   // Función para procesar la cola de speech
@@ -92,10 +92,13 @@ const AnswerFromImageUX: React.FC = () => {
     processSpeechQueue();
   };
 
-  // Guardar preferencia de autoRead en localStorage
+  // Inicializar preferencias cuando se cargan
   useEffect(() => {
-    localStorage.setItem('answerFromImageUX_autoRead', autoRead.toString());
-  }, [autoRead]);
+    if (!preferencesLoading) {
+      setInputMode(preferences.imageInputMode);
+      setAutoRead(preferences.autoRead);
+    }
+  }, [preferences, preferencesLoading]);
 
   // Activar cámara automáticamente cuando se selecciona modo cámara
   useEffect(() => {
@@ -434,7 +437,7 @@ const AnswerFromImageUX: React.FC = () => {
     }
   };
 
-  if (credentialsLoading || variablesLoading) {
+  if (credentialsLoading || variablesLoading || preferencesLoading) {
     return <div className="text-center py-8 text-white">Cargando configuración…</div>;
   }
   
@@ -474,22 +477,6 @@ const AnswerFromImageUX: React.FC = () => {
       </div>
 
       <div className="bg-gray-700 rounded-lg p-6 space-y-4">
-        {/* Selector de modo de entrada */}
-        <div className="space-y-3">
-          <label className="block text-sm font-medium text-gray-300">Modo de entrada:</label>
-          <select
-            value={inputMode}
-            onChange={(e) => {
-              setInputMode(e.target.value as InputMode);
-              handleClear();
-              if (isCameraOn) stopCamera();
-            }}
-            className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="file">📁 Cargar archivo de imagen</option>
-            <option value="camera">📷 Tomar foto con cámara</option>
-          </select>
-        </div>
 
         {/* Contenido según el modo seleccionado */}
         {inputMode === 'file' ? (
@@ -547,18 +534,6 @@ const AnswerFromImageUX: React.FC = () => {
           </div>
         )}
 
-        {/* Checkbox de lectura automática */}
-        <div className="flex items-center space-x-3">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={autoRead}
-              onChange={(e) => setAutoRead(e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500 focus:ring-2"
-            />
-            <span className="text-sm text-gray-300">🔊 Lectura automática de respuestas</span>
-          </label>
-        </div>
 
         {/* Preview de imágenes */}
         {previewUrls.length > 0 && (
