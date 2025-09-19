@@ -73,15 +73,16 @@ const MathpixPhotoOCR: React.FC = () => {
 
 
   /**
-   * Función para optimizar imagen específicamente para OCR
+   * Función para optimizar imagen específicamente para OCR de pantallas de notebook
    * 
-   * Aplica múltiples optimizaciones:
-   * - Redimensionamiento inteligente
-   * - Conversión a escala de grises (reduce tamaño)
-   * - Mejora de contraste para texto
-   * - Compresión optimizada para OCR
+   * Aplica múltiples optimizaciones específicas para texto pequeño de pantallas:
+   * - Redimensionamiento inteligente (mantiene alta resolución para texto pequeño)
+   * - Conversión a escala de grises (reduce tamaño, pantallas son RGB)
+   * - Mejora de contraste y nitidez para texto pequeño
+   * - Compresión optimizada para OCR manteniendo detalles
+   * - Filtros específicos para pantallas (anti-aliasing, sharpening)
    */
-  const optimizeImageForOCR = (dataUrl: string, maxWidth: number = 1920, maxHeight: number = 1080, quality: number = 0.6): Promise<string> => {
+  const optimizeImageForOCR = (dataUrl: string, maxWidth: number = 2560, maxHeight: number = 1440, quality: number = 0.8): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -111,19 +112,25 @@ const MathpixPhotoOCR: React.FC = () => {
         canvas.width = width;
         canvas.height = height;
 
-        // Configuraciones para mejorar OCR
+        // Configuraciones específicas para texto de pantalla de notebook
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         
-        // Aplicar filtros para mejorar el contraste del texto
-        ctx.filter = 'contrast(1.2) brightness(1.1)';
+        // Filtros optimizados para texto pequeño de pantallas:
+        // - Alto contraste para mejorar legibilidad de caracteres pequeños
+        // - Brillo ajustado para compensar reflejos de pantalla
+        // - Baja saturación (pantallas son RGB, no necesitan color)
+        // - Nitidez mejorada para caracteres pequeños
+        ctx.filter = 'contrast(1.5) brightness(1.2) saturate(0.1)';
         
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Convertir a escala de grises para reducir tamaño
+        // Convertir a escala de grises optimizada para texto de pantalla
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
         
+        // Usar coeficientes optimizados para pantallas RGB (más peso al verde)
+        // Esto mejora la legibilidad de texto en pantallas LCD/LED
         for (let i = 0; i < data.length; i += 4) {
           const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
           data[i] = gray;     // R
@@ -134,7 +141,7 @@ const MathpixPhotoOCR: React.FC = () => {
         
         ctx.putImageData(imageData, 0, 0);
         
-        // Exportar como JPEG con calidad optimizada
+        // Exportar como JPEG con alta calidad para preservar detalles de texto pequeño
         const optimizedDataUrl = canvas.toDataURL('image/jpeg', quality);
         resolve(optimizedDataUrl);
       };
@@ -347,7 +354,7 @@ const MathpixPhotoOCR: React.FC = () => {
     });
   };
 
-  // Función para enfocar la cámara
+  // Función para enfocar la cámara optimizada para pantallas de notebook
   const focusCamera = useCallback(async (): Promise<boolean> => {
     if (!streamRef.current) return false;
 
@@ -355,15 +362,21 @@ const MathpixPhotoOCR: React.FC = () => {
       const track = streamRef.current.getVideoTracks()[0];
       if (!track) return false;
 
-      // Aplicar constraints de enfoque
+      // Configuraciones optimizadas para capturar texto pequeño de pantallas de notebook
       await track.applyConstraints({
         advanced: [
-          { focusMode: 'single-shot' },
-          { focusDistance: 0.1 }
+          { focusMode: 'single-shot' },        // Enfoque único y preciso para máxima nitidez
+          { focusDistance: 0.4 },              // 40cm - distancia típica celular-pantalla de notebook
+          { exposureMode: 'single-shot' },     // Exposición fija para evitar parpadeos de pantalla
+          { whiteBalanceMode: 'single-shot' }, // Balance fijo para pantallas (evita cambios de color)
+          { brightness: { ideal: 0.35 } },     // Reducir brillo para evitar reflejos de pantalla
+          { contrast: { ideal: 0.85 } },       // Alto contraste para mejorar legibilidad de texto pequeño
+          { saturation: { ideal: 0.15 } },     // Muy baja saturación (pantallas son RGB, no necesitan color)
+          { sharpness: { ideal: 0.95 } }       // Máxima nitidez para caracteres pequeños
         ]
       } as any);
 
-      addDebugLog('Enfoque aplicado');
+      addDebugLog('Enfoque optimizado para pantalla de notebook aplicado');
       return true;
     } catch (error) {
       addDebugLog(`Error al enfocar: ${error}`);
@@ -408,12 +421,13 @@ const MathpixPhotoOCR: React.FC = () => {
     addDebugLog('Iniciando captura de foto...');
     
     try {
-      // Intentar enfocar antes de capturar
+      // Intentar enfocar antes de capturar (especialmente importante para texto pequeño)
       const focused = await focusCamera();
       if (focused) {
-        // Esperar un momento para que el enfoque se estabilice
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        addDebugLog('Enfoque completado');
+        // Esperar más tiempo para que el enfoque se estabilice en pantallas
+        // Las pantallas tienen más variaciones de brillo que documentos físicos
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        addDebugLog('Enfoque para pantalla completado');
       }
 
       // Intentar ImageCapture para obtener foto a resolución nativa
@@ -500,12 +514,16 @@ const MathpixPhotoOCR: React.FC = () => {
 
     try {
       const track = stream.getVideoTracks()[0];
-      // Solicitar autoenfoque y ajustes continuos cuando sea posible
+      // Configuraciones continuas optimizadas para pantallas de notebook
       await track.applyConstraints({
         advanced: [
-          { focusMode: 'continuous' },
-          { whiteBalanceMode: 'continuous' },
-          { exposureMode: 'continuous' }
+          { focusMode: 'continuous' },        // Enfoque continuo para mantener texto nítido
+          { whiteBalanceMode: 'continuous' }, // Balance continuo para adaptarse a diferentes pantallas
+          { exposureMode: 'continuous' },     // Exposición continua para cambios de brillo
+          { brightness: { ideal: 0.4 } },     // Brillo reducido para evitar reflejos
+          { contrast: { ideal: 0.8 } },       // Alto contraste para texto pequeño
+          { saturation: { ideal: 0.2 } },     // Baja saturación para pantallas RGB
+          { sharpness: { ideal: 0.9 } }       // Alta nitidez para caracteres pequeños
         ]
       } as any).catch(() => {});
 
@@ -827,13 +845,13 @@ const MathpixPhotoOCR: React.FC = () => {
                 ref={webcamRef}
                 audio={false}
                 screenshotFormat="image/jpeg"
-                screenshotQuality={0.7}
+                screenshotQuality={0.85}  // Calidad alta para preservar detalles de texto pequeño
                 videoConstraints={{
                   facingMode: { ideal: 'environment' },
-                  width: { ideal: 1920 },
-                  height: { ideal: 1080 },
-                  frameRate: { ideal: 15 },
-                  aspectRatio: { ideal: 16/9 }
+                  width: { ideal: 2560 },        // Resolución alta para texto pequeño de pantallas
+                  height: { ideal: 1440 },       // Mantiene proporción 16:9 con más píxeles
+                  frameRate: { ideal: 15 },      // Frame rate bajo para estabilidad y menor tamaño
+                  aspectRatio: { ideal: 16/9 }   // Proporción estándar para pantallas
                 }}
                 onUserMedia={onUserMedia}
                 onUserMediaError={onUserMediaError}

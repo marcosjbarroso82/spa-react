@@ -181,13 +181,13 @@ const TakePhoto: React.FC = () => {
               ref={webcamRef}
               audio={false}
               screenshotFormat="image/jpeg"
-              screenshotQuality={0.7}
+              screenshotQuality={0.85}  // Calidad alta para preservar detalles de texto pequeño
               videoConstraints={{
                 facingMode: { ideal: 'environment' },
-                width: { ideal: 1920 },
-                height: { ideal: 1080 },
-                frameRate: { ideal: 15 },
-                aspectRatio: { ideal: 16/9 }
+                width: { ideal: 2560 },        // Resolución alta para texto pequeño de pantallas
+                height: { ideal: 1440 },       // Mantiene proporción 16:9 con más píxeles
+                frameRate: { ideal: 15 },      // Frame rate bajo para estabilidad y menor tamaño
+                aspectRatio: { ideal: 16/9 }   // Proporción estándar para pantallas
               }}
               onUserMedia={onUserMedia}
               onUserMediaError={onUserMediaError}
