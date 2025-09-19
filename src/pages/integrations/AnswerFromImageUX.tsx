@@ -4,6 +4,10 @@ import { useCredentials } from '../../hooks/useCredentials';
 import { useVariables } from '../../hooks/useVariables';
 import { usePreferences } from '../../hooks/usePreferences';
 import { useCameraConfig } from '../../hooks/useCameraConfig';
+import { ImageInfo } from '../../utils/imageUtils';
+import ImageDisplay from '../../components/ImageDisplay';
+import FileUpload from '../../components/FileUpload';
+import CameraPreview from '../../components/CameraPreview';
 
 interface FlowiseResponse {
   response?: {
@@ -19,7 +23,8 @@ const AnswerFromImageUX: React.FC = () => {
   const { getCredentialByKey, isLoading: credentialsLoading } = useCredentials();
   const { getVariableByKey, isLoading: variablesLoading } = useVariables();
   const { preferences, isLoading: preferencesLoading } = usePreferences();
-  const { getVideoConstraints, getContinuousFocusConstraints } = useCameraConfig();
+  const { getContinuousFocusConstraints } = useCameraConfig();
+  
   const [inputMode, setInputMode] = useState<InputMode>('file');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
@@ -29,18 +34,13 @@ const AnswerFromImageUX: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [autoRead, setAutoRead] = useState<boolean>(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
-  const [cameraInitialized, setCameraInitialized] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isFocusing, setIsFocusing] = useState(false);
   const [showResults, setShowResults] = useState(false);
   
   // Estados para debugging
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [imageInfo, setImageInfo] = useState<{
-    size: string;
-    dimensions: string;
-    format: string;
-  }[]>([]);
+  const [imageInfo, setImageInfo] = useState<ImageInfo[]>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const webcamRef = useRef<Webcam>(null);
@@ -72,94 +72,17 @@ const AnswerFromImageUX: React.FC = () => {
     console.log(`[AnswerFromImageUX] ${message}`);
   };
 
-  // Función para redimensionar imagen
-  const resizeImage = (dataUrl: string, maxWidth: number = 1920, maxHeight: number = 1080, quality: number = 0.8): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let { width, height } = img;
+  // Función para redimensionar imagen (usando utilidad)
+  const resizeImage = useCallback(async (dataUrl: string, maxWidth: number = 1920, maxHeight: number = 1080, quality: number = 0.8): Promise<string> => {
+    const { resizeImage: resizeImageUtil } = await import('../../utils/imageUtils');
+    return resizeImageUtil(dataUrl, maxWidth, maxHeight, quality);
+  }, []);
 
-        // Calcular nuevas dimensiones manteniendo aspect ratio
-        if (width > height) {
-          if (width > maxWidth) {
-            height = (height * maxWidth) / width;
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = (width * maxHeight) / height;
-            height = maxHeight;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
-          resolve(resizedDataUrl);
-        } else {
-          resolve(dataUrl);
-        }
-      };
-      img.src = dataUrl;
-    });
-  };
-
-  // Función para obtener información de la imagen
-  const getImageInfo = (imageUrl: string) => {
-    // Verificar si es un data URL o una URL de objeto
-    const isDataUrl = imageUrl.startsWith('data:image/');
-    
-    let sizeInMB = 0;
-    let imageType = 'UNKNOWN';
-    
-    if (isDataUrl) {
-      // Para data URLs, extraer información del base64
-      const base64Data = imageUrl.split(',')[1];
-      if (!base64Data) {
-        return Promise.resolve({
-          size: '0.00 MB',
-          dimensions: '0 × 0',
-          format: 'UNKNOWN'
-        });
-      }
-      
-      const mimeType = imageUrl.split(',')[0].split(':')[1].split(';')[0];
-      imageType = mimeType.split('/')[1];
-      
-      // Calcular tamaño aproximado
-      const sizeInBytes = (base64Data.length * 3) / 4;
-      sizeInMB = sizeInBytes / (1024 * 1024);
-    } else {
-      // Para URLs de objeto, no podemos calcular el tamaño fácilmente
-      // Usaremos el tamaño del archivo si está disponible
-      imageType = 'JPEG'; // Asumimos JPEG para fotos capturadas
-    }
-    
-    // Obtener dimensiones
-    return new Promise<{size: string, dimensions: string, format: string}>((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        resolve({
-          size: isDataUrl ? `${sizeInMB.toFixed(2)} MB` : 'Tamaño desconocido',
-          dimensions: `${img.width} × ${img.height}`,
-          format: imageType.toUpperCase()
-        });
-      };
-      img.onerror = () => {
-        resolve({
-          size: isDataUrl ? `${sizeInMB.toFixed(2)} MB` : 'Tamaño desconocido',
-          dimensions: '0 × 0',
-          format: imageType.toUpperCase()
-        });
-      };
-      img.src = imageUrl;
-    });
-  };
+  // Función para obtener información de la imagen (usando utilidad)
+  const getImageInfo = useCallback(async (imageUrl: string): Promise<ImageInfo> => {
+    const { getImageInfo: getImageInfoUtil } = await import('../../utils/imageUtils');
+    return getImageInfoUtil(imageUrl);
+  }, []);
 
   // Función para enfocar la cámara
   const focusCamera = useCallback(async (): Promise<boolean> => {
@@ -235,13 +158,13 @@ const AnswerFromImageUX: React.FC = () => {
   const startCamera = useCallback(() => {
     setError(null);
     setIsCameraOn(true);
-    setCameraInitialized(false);
+      // Cámara no inicializada
     addDebugLog('Iniciando cámara...');
   }, []);
 
   const stopCamera = useCallback(() => {
     setIsCameraOn(false);
-    setCameraInitialized(false);
+      // Cámara no inicializada
     try {
       streamRef.current?.getTracks().forEach(t => t.stop());
     } catch {}
@@ -313,7 +236,7 @@ const AnswerFromImageUX: React.FC = () => {
       addDebugLog(`Error al procesar imagen: ${err}`);
       setError('Error al procesar la imagen capturada');
     }
-  }, []);
+  }, [getImageInfo, resizeImage]);
 
   const capturePhoto = useCallback(async () => {
     if (!webcamRef.current) {
@@ -376,7 +299,7 @@ const AnswerFromImageUX: React.FC = () => {
     addDebugLog('Cámara conectada exitosamente');
     setError(null);
     streamRef.current = stream;
-    setCameraInitialized(true);
+      // Cámara inicializada
 
     try {
       const track = stream.getVideoTracks()[0];
@@ -398,50 +321,55 @@ const AnswerFromImageUX: React.FC = () => {
     setError('No se pudo acceder a la cámara. Verifica los permisos.');
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFileSelect = (files: File[]) => {
+    if (files.length === 0) return;
     
-    if (!file.type.startsWith('image/')) {
-      setError('Por favor selecciona un archivo de imagen válido');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setError('El archivo es demasiado grande. El tamaño máximo es 5MB');
-      return;
-    }
-    
-    setSelectedFiles(prev => [...prev, file]);
-    setError(null);
-    setOcrText(null);
-    setLecturas([]);
-    setShowResults(false);
-    
-    const url = URL.createObjectURL(file);
-    setPreviewUrls(prev => [...prev, url]);
-    
-    // Obtener información de la imagen usando el archivo directamente
-    const fileSizeInMB = (file.size / (1024 * 1024)).toFixed(2);
-    const fileType = file.type.split('/')[1]?.toUpperCase() || 'UNKNOWN';
-    
-    // Crear información básica del archivo
-    const fileInfo = {
-      size: `${fileSizeInMB} MB`,
-      dimensions: 'Cargando...',
-      format: fileType
-    };
-    
-    setImageInfo(prev => [...prev, fileInfo]);
-    addDebugLog(`Archivo agregado: ${fileSizeInMB}MB, tipo: ${fileType}`);
-    
-    // Obtener dimensiones de la imagen
-    getImageInfo(url).then(info => {
-      setImageInfo(prev => prev.map((item, index) => 
-        index === prev.length - 1 ? { ...item, dimensions: info.dimensions } : item
-      ));
-      addDebugLog(`Dimensiones obtenidas: ${info.dimensions}`);
-    }).catch(err => {
-      addDebugLog(`Error al obtener dimensiones: ${err}`);
+    // Procesar cada archivo
+    files.forEach(file => {
+      if (!file.type.startsWith('image/')) {
+        setError('Por favor selecciona un archivo de imagen válido');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setError('El archivo es demasiado grande. El tamaño máximo es 5MB');
+        return;
+      }
+      
+      setSelectedFiles(prev => [...prev, file]);
+      setError(null);
+      setOcrText(null);
+      setLecturas([]);
+      setShowResults(false);
+      
+      const url = URL.createObjectURL(file);
+      setPreviewUrls(prev => [...prev, url]);
+      
+      // Obtener información de la imagen usando el archivo directamente
+      const fileSizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+      const fileType = file.type.split('/')[1]?.toUpperCase() || 'UNKNOWN';
+      
+      // Crear información básica del archivo
+      const fileInfo: ImageInfo = {
+        size: `${fileSizeInMB} MB`,
+        dimensions: 'Cargando...',
+        format: fileType,
+        fileSize: file.size,
+        width: 0,
+        height: 0
+      };
+      
+      setImageInfo(prev => [...prev, fileInfo]);
+      addDebugLog(`Archivo agregado: ${fileSizeInMB}MB, tipo: ${fileType}`);
+      
+      // Obtener dimensiones de la imagen
+      getImageInfo(url).then(info => {
+        setImageInfo(prev => prev.map((item, index) => 
+          index === prev.length - 1 ? { ...item, dimensions: info.dimensions, width: info.width, height: info.height } : item
+        ));
+        addDebugLog(`Dimensiones obtenidas: ${info.dimensions}`);
+      }).catch(err => {
+        addDebugLog(`Error al obtener dimensiones: ${err}`);
+      });
     });
     
     if (fileInputRef.current) {
@@ -690,55 +618,29 @@ const AnswerFromImageUX: React.FC = () => {
         {/* Contenido según el modo seleccionado */}
         {inputMode === 'file' ? (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">📁 Subir imagen</label>
-            <input
-              ref={fileInputRef}
-              type="file"
+            <FileUpload
+              onFileSelect={handleFileSelect}
               accept="image/*"
-              onChange={handleFileSelect}
-              className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+              multiple={true}
+              maxSize={5}
+              buttonText="Seleccionar Imágenes"
+              icon="📁"
+              showInfo={true}
             />
-            <p className="text-xs text-gray-400 mt-1">Máximo 5MB por archivo</p>
           </div>
         ) : (
           <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-300 mb-2">📷 Tomar foto</label>
-            
-            {/* Solo mostrar el botón de tomar foto */}
-            <div className="flex justify-center">
-              <button
-                onClick={capturePhoto}
-                disabled={isCapturing || !cameraInitialized}
-                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors duration-200 flex items-center gap-2 text-lg"
-              >
-                {isCapturing ? (
-                  isFocusing ? '🎯 Enfocando...' : '📸 Capturando...'
-                ) : (
-                  '📸 Tomar Foto'
-                )}
-              </button>
-            </div>
-            
-            {!cameraInitialized && isCameraOn && (
-              <p className="text-center text-sm text-gray-400">Inicializando cámara...</p>
-            )}
-            
-            <p className="text-xs text-gray-400 text-center">Usa la cámara de tu dispositivo</p>
-
-            {/* Cámara oculta - solo para funcionalidad */}
-            {isCameraOn && (
-              <div className="hidden">
-                <Webcam
-                  ref={webcamRef}
-                  audio={false}
-                  screenshotFormat="image/jpeg"
-                  screenshotQuality={0.85}  // Calidad alta para preservar detalles de texto pequeño
-                  videoConstraints={getVideoConstraints()}
-                  onUserMedia={onUserMedia}
-                  onUserMediaError={onUserMediaError}
-                />
-              </div>
-            )}
+            <CameraPreview
+              isActive={isCameraOn}
+              onCapture={capturePhoto}
+              isCapturing={isCapturing}
+              isFocusing={isFocusing}
+              error={error || undefined}
+              showControls={true}
+              webcamRef={webcamRef as React.RefObject<Webcam>}
+              onUserMedia={onUserMedia}
+              onUserMediaError={onUserMediaError}
+            />
           </div>
         )}
 
@@ -789,23 +691,23 @@ const AnswerFromImageUX: React.FC = () => {
                 <h4 className="text-sm font-medium text-gray-300">🖼️ Imágenes seleccionadas ({previewUrls.length}):</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {previewUrls.map((url, index) => (
-                    <div key={index} className="relative space-y-2">
-                      <div className="flex justify-between items-center">
-                        <div className="text-xs text-gray-400">Imagen {index + 1}</div>
+                    <ImageDisplay
+                      key={index}
+                      imageSrc={url}
+                      imageInfo={imageInfo[index]}
+                      title={`Imagen ${index + 1}`}
+                      showInfo={true}
+                      maxHeight="max-h-48"
+                      actions={
                         <button
                           onClick={() => handleRemoveImage(index)}
                           className="text-red-400 hover:text-red-300 text-sm"
                           title="Remover imagen"
                         >
-                          ✕
+                          ✕ Remover
                         </button>
-                      </div>
-                      <img 
-                        src={url} 
-                        alt={`Preview ${index + 1}`} 
-                        className="w-full max-h-48 object-contain rounded-lg border border-gray-500" 
-                      />
-                    </div>
+                      }
+                    />
                   ))}
                 </div>
               </div>

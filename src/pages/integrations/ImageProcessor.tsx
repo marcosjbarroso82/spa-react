@@ -1,16 +1,12 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useCameraConfig } from '../../hooks/useCameraConfig';
+import { useImageProcessing } from '../../hooks/useImageProcessing';
+import { fileToDataUrl, ImageInfo } from '../../utils/imageUtils';
 import ImageModal from '../../components/ImageModal';
 import CameraCapture from '../../components/CameraCapture';
-
-interface ImageInfo {
-  size: string;
-  dimensions: string;
-  format: string;
-  fileSize: number;
-  width: number;
-  height: number;
-}
+import ImageComparison from '../../components/ImageComparison';
+import FileUpload from '../../components/FileUpload';
+import ProcessingControls from '../../components/ProcessingControls';
 
 const ImageProcessor: React.FC = () => {
   const {
@@ -22,164 +18,55 @@ const ImageProcessor: React.FC = () => {
     presets
   } = useCameraConfig();
 
+  const { processImage, isProcessing } = useImageProcessing();
+
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [originalInfo, setOriginalInfo] = useState<ImageInfo | null>(null);
   const [processedInfo, setProcessedInfo] = useState<ImageInfo | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [modalImage, setModalImage] = useState<{ src: string; alt: string; title: string } | null>(null);
   const [showCamera, setShowCamera] = useState(false);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Función para obtener información de una imagen
+  // Función para obtener información de una imagen (usando utilidad)
   const getImageInfo = useCallback(async (dataUrl: string): Promise<ImageInfo> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        // Calcular tamaño del archivo en bytes
-        const base64Length = dataUrl.split(',')[1]?.length || 0;
-        const fileSize = Math.round((base64Length * 3) / 4);
-        
-        resolve({
-          size: formatFileSize(fileSize),
-          dimensions: `${img.width} x ${img.height}`,
-          format: dataUrl.split(';')[0].split(':')[1] || 'unknown',
-          fileSize,
-          width: img.width,
-          height: img.height
-        });
-      };
-      img.src = dataUrl;
-    });
+    const { getImageInfo: getImageInfoUtil } = await import('../../utils/imageUtils');
+    return getImageInfoUtil(dataUrl);
   }, []);
 
-  // Función para formatear tamaño de archivo
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  // Función para optimizar imagen usando la configuración actual
-  const optimizeImage = useCallback((dataUrl: string): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        if (!ctx) {
-          resolve(dataUrl);
-          return;
-        }
-
-        let { width, height } = img;
-
-        // Redimensionar si es necesario según la configuración
-        const maxWidth = cameraConfig.quality.maxWidth;
-        const maxHeight = cameraConfig.quality.maxHeight;
-        
-        if (width > maxWidth || height > maxHeight) {
-          const aspectRatio = width / height;
-          if (width > height) {
-            width = Math.min(width, maxWidth);
-            height = width / aspectRatio;
-          } else {
-            height = Math.min(height, maxHeight);
-            width = height * aspectRatio;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        // Configuraciones de renderizado
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        
-        // Aplicar filtros de procesamiento
-        ctx.filter = `contrast(${cameraConfig.processing.filters.contrast}) brightness(${cameraConfig.processing.filters.brightness}) saturate(${cameraConfig.processing.filters.saturation})`;
-        
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        // Convertir a escala de grises si está configurado
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const data = imageData.data;
-        
-        // Aplicar conversión a escala de grises
-        for (let i = 0; i < data.length; i += 4) {
-          const gray = Math.round(
-            data[i] * cameraConfig.processing.grayscale.redWeight +
-            data[i + 1] * cameraConfig.processing.grayscale.greenWeight +
-            data[i + 2] * cameraConfig.processing.grayscale.blueWeight
-          );
-          data[i] = gray;     // Red
-          data[i + 1] = gray; // Green
-          data[i + 2] = gray; // Blue
-          // Alpha se mantiene igual
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
-        
-        // Exportar con la calidad configurada
-        const optimizedDataUrl = canvas.toDataURL('image/jpeg', cameraConfig.quality.optimizationQuality);
-        resolve(optimizedDataUrl);
-      };
-      img.src = dataUrl;
-    });
-  }, [cameraConfig]);
-
   // Función para manejar la subida de archivos
-  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
 
-    if (!file.type.startsWith('image/')) {
-      setMessage({ type: 'error', text: 'Por favor selecciona un archivo de imagen válido' });
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string;
-      setOriginalImage(dataUrl);
-      
-      // Obtener información de la imagen original
-      const info = await getImageInfo(dataUrl);
-      setOriginalInfo(info);
-      
-      // Limpiar imagen procesada anterior
-      setProcessedImage(null);
-      setProcessedInfo(null);
-      
-      setMessage({ type: 'success', text: 'Imagen cargada correctamente. Haz clic en "Aplicar" para procesarla.' });
-    };
-    reader.readAsDataURL(file);
+    const file = files[0]; // Tomar solo el primer archivo
+    const dataUrl = await fileToDataUrl(file);
+    
+    setOriginalImage(dataUrl);
+    
+    // Obtener información de la imagen original
+    const info = await getImageInfo(dataUrl);
+    setOriginalInfo(info);
+    
+    // Limpiar imagen procesada anterior
+    setProcessedImage(null);
+    setProcessedInfo(null);
+    
+    setMessage({ type: 'success', text: 'Imagen cargada correctamente. Haz clic en "Aplicar" para procesarla.' });
   }, [getImageInfo]);
 
   // Función para aplicar procesamiento con la configuración actual
   const applyProcessing = useCallback(async () => {
     if (!originalImage) return;
     
-    setIsProcessing(true);
     try {
-      const processed = await optimizeImage(originalImage);
-      setProcessedImage(processed);
-      
-      const processedInfo = await getImageInfo(processed);
-      setProcessedInfo(processedInfo);
-      
+      const result = await processImage(originalImage);
+      setProcessedImage(result.processedImage);
+      setProcessedInfo(result.processedInfo);
       setMessage({ type: 'success', text: 'Imagen procesada con la configuración actual' });
     } catch (error) {
       setMessage({ type: 'error', text: 'Error al procesar la imagen' });
-    } finally {
-      setIsProcessing(false);
     }
-  }, [originalImage, optimizeImage, getImageInfo]);
+  }, [originalImage, processImage]);
 
   // Función para abrir modal de imagen
   const openImageModal = (src: string, alt: string, title: string) => {
@@ -226,10 +113,6 @@ const ImageProcessor: React.FC = () => {
     setMessage(null);
     setModalImage(null);
     setShowCamera(false);
-    setIsProcessing(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
   };
 
   return (
@@ -254,41 +137,26 @@ const ImageProcessor: React.FC = () => {
           <div className="mb-8">
             <div className="bg-gray-700 rounded-lg p-6">
               <h2 className="text-xl font-semibold text-white mb-4">📁 Subir Imagen</h2>
-              <div className="flex flex-col sm:flex-row gap-4 items-center">
-                <input
-                  ref={fileInputRef}
-                  type="file"
+              <div className="space-y-4">
+                <FileUpload
+                  onFileSelect={handleFileUpload}
                   accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
+                  multiple={false}
+                  maxSize={10}
+                  buttonText="Seleccionar Archivo"
+                  icon="📁"
                 />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
-                >
-                  📁 Seleccionar Archivo
-                </button>
-                <button
-                  onClick={openCamera}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
-                >
-                  📷 Usar Cámara
-                </button>
-                {originalImage && (
-                  <button
-                    onClick={applyProcessing}
-                    disabled={isProcessing}
-                    className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
-                  >
-                    {isProcessing ? '⏳ Procesando...' : '✅ Aplicar'}
-                  </button>
-                )}
-                <button
-                  onClick={clearAll}
-                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
-                >
-                  🗑️ Limpiar Todo
-                </button>
+                <ProcessingControls
+                  onProcess={applyProcessing}
+                  onClear={clearAll}
+                  onCamera={openCamera}
+                  isProcessing={isProcessing}
+                  hasImage={!!originalImage}
+                  processText="Aplicar"
+                  clearText="Limpiar Todo"
+                  cameraText="Usar Cámara"
+                  showCamera={true}
+                />
               </div>
               <div className="mt-3 text-sm text-gray-400">
                 <p>💡 <strong>Opciones:</strong> Sube un archivo desde tu dispositivo o usa la cámara con las configuraciones actuales</p>
@@ -299,66 +167,15 @@ const ImageProcessor: React.FC = () => {
           {/* Comparación de imágenes */}
           {originalImage && (
             <div className="mb-8">
-              <h2 className="text-xl font-semibold text-white mb-4">🖼️ Comparación de Imágenes</h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Imagen original */}
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <h3 className="text-lg font-medium text-white mb-3">Imagen Original</h3>
-                  <div className="relative">
-                    <img
-                      src={originalImage}
-                      alt="Original"
-                      className="w-full h-auto max-h-96 object-contain rounded-lg border border-gray-600 cursor-pointer hover:opacity-90 transition-opacity duration-200"
-                      onClick={() => openImageModal(originalImage, 'Imagen Original', 'Imagen Original')}
-                      title="Haz clic para ampliar"
-                    />
-                  </div>
-                  {originalInfo && (
-                    <div className="mt-3 text-sm text-gray-300">
-                      <p><strong>Dimensiones:</strong> {originalInfo.dimensions}</p>
-                      <p><strong>Tamaño:</strong> {originalInfo.size}</p>
-                      <p><strong>Formato:</strong> {originalInfo.format}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Imagen procesada */}
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <h3 className="text-lg font-medium text-white mb-3">Imagen Procesada</h3>
-                  <div className="relative">
-                    {isProcessing ? (
-                      <div className="w-full h-64 bg-gray-600 rounded-lg flex items-center justify-center">
-                        <div className="text-white text-lg">⏳ Procesando...</div>
-                      </div>
-                    ) : processedImage ? (
-                      <img
-                        src={processedImage}
-                        alt="Processed"
-                        className="w-full h-auto max-h-96 object-contain rounded-lg border border-gray-600 cursor-pointer hover:opacity-90 transition-opacity duration-200"
-                        onClick={() => openImageModal(processedImage, 'Imagen Procesada', 'Imagen Procesada')}
-                        title="Haz clic para ampliar"
-                      />
-                    ) : (
-                      <div className="w-full h-64 bg-gray-600 rounded-lg flex flex-col items-center justify-center">
-                        <div className="text-gray-400 text-lg mb-2">No procesada</div>
-                        <div className="text-gray-500 text-sm text-center">
-                          Haz clic en "Aplicar" para procesar<br/>la imagen con la configuración actual
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  {processedInfo && (
-                    <div className="mt-3 text-sm text-gray-300">
-                      <p><strong>Dimensiones:</strong> {processedInfo.dimensions}</p>
-                      <p><strong>Tamaño:</strong> {processedInfo.size}</p>
-                      <p><strong>Formato:</strong> {processedInfo.format}</p>
-                      {originalInfo && (
-                        <p><strong>Reducción:</strong> {((1 - processedInfo.fileSize / originalInfo.fileSize) * 100).toFixed(1)}%</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <ImageComparison
+                originalImage={originalImage}
+                processedImage={processedImage}
+                originalInfo={originalInfo}
+                processedInfo={processedInfo}
+                onImageClick={(src, title) => openImageModal(src, title, title)}
+                processing={isProcessing}
+                showSizeReduction={true}
+              />
             </div>
           )}
 
