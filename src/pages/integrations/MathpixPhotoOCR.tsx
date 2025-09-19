@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import { useCredentials } from '../../hooks/useCredentials';
+import { usePreferences } from '../../hooks/usePreferences';
 
 interface MathpixResponse {
   text: string;
@@ -19,10 +20,17 @@ interface MathpixResponse {
     type: string;
     value: string;
   }>;
+  error?: string;
+  error_info?: {
+    id: string;
+    message: string;
+  };
+  line_data?: any[];
 }
 
 const MathpixPhotoOCR: React.FC = () => {
   const { getCredentialByKey, isLoading } = useCredentials();
+  const { preferences } = usePreferences();
   
   // Estados para la cámara
   const [photo, setPhoto] = useState<string | null>(null);
@@ -39,7 +47,6 @@ const MathpixPhotoOCR: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Estados para debugging y información
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
   const [imageInfo, setImageInfo] = useState<{
     size: string;
     dimensions: string;
@@ -333,39 +340,112 @@ const MathpixPhotoOCR: React.FC = () => {
 
       addDebugLog(`Enviando a Mathpix: ${finalImageType}, ${(finalBase64Data.length * 3 / 4 / (1024 * 1024)).toFixed(2)}MB`);
 
+      // Preparar el request body
+      const requestBody = {
+        src: `data:image/${finalImageType};base64,${finalBase64Data}`,
+        formats: ['text', 'latex_styled', 'data'],
+        data_options: {
+          include_asciimath: true,
+          include_latex: true,
+        },
+      };
+
+      // Preparar headers
+      const requestHeaders = {
+        'app_id': appId,
+        'app_key': apiKey,
+        'Content-Type': 'application/json',
+      };
+
+      // Mostrar información detallada del request si debug está activado
+      if (preferences.debug) {
+        addDebugLog('=== DEBUG REQUEST INFO ===');
+        addDebugLog(`URL: https://api.mathpix.com/v3/text`);
+        addDebugLog(`Method: POST`);
+        addDebugLog(`Headers: ${JSON.stringify(requestHeaders, null, 2)}`);
+        addDebugLog(`Body size: ${JSON.stringify(requestBody).length} characters`);
+        addDebugLog(`Image data size: ${finalBase64Data.length} characters`);
+        addDebugLog(`Image type: ${finalImageType}`);
+        addDebugLog(`Image size: ${(finalBase64Data.length * 3 / 4 / (1024 * 1024)).toFixed(2)}MB`);
+        addDebugLog(`Image data preview (first 100 chars): ${finalBase64Data.substring(0, 100)}...`);
+        addDebugLog(`Request body src preview: ${requestBody.src.substring(0, 100)}...`);
+        addDebugLog('========================');
+      }
+
       // Hacer request a Mathpix API
+      const startTime = Date.now();
       const response = await fetch('https://api.mathpix.com/v3/text', {
         method: 'POST',
-        headers: {
-          'app_id': appId,
-          'app_key': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          src: `data:image/${finalImageType};base64,${finalBase64Data}`,
-          formats: ['text', 'latex_styled', 'data'],
-          data_options: {
-            include_asciimath: true,
-            include_latex: true,
-          },
-        }),
+        headers: requestHeaders,
+        body: JSON.stringify(requestBody),
       });
 
+      const endTime = Date.now();
+      const requestDuration = endTime - startTime;
+
       addDebugLog(`Respuesta de Mathpix: ${response.status} ${response.statusText}`);
+      
+      // Mostrar información detallada de la respuesta si debug está activado
+      if (preferences.debug) {
+        addDebugLog('=== DEBUG RESPONSE INFO ===');
+        addDebugLog(`Status: ${response.status}`);
+        addDebugLog(`Status Text: ${response.statusText}`);
+        addDebugLog(`Duration: ${requestDuration}ms`);
+        addDebugLog(`Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}`);
+        addDebugLog(`OK: ${response.ok}`);
+        addDebugLog(`Redirected: ${response.redirected}`);
+        addDebugLog(`Type: ${response.type}`);
+        addDebugLog(`URL: ${response.url}`);
+        addDebugLog('==========================');
+      }
 
       if (!response.ok) {
         let errorMessage = `Error ${response.status}: ${response.statusText}`;
+        
         try {
           const errorData = await response.json();
           errorMessage = errorData.error || errorMessage;
-          addDebugLog(`Error detallado: ${JSON.stringify(errorData)}`);
+          
+          if (preferences.debug) {
+            addDebugLog('=== DEBUG ERROR RESPONSE ===');
+            addDebugLog(`Error Body: ${JSON.stringify(errorData, null, 2)}`);
+            addDebugLog('============================');
+          } else {
+            addDebugLog(`Error detallado: ${JSON.stringify(errorData)}`);
+          }
         } catch (parseError) {
           addDebugLog(`No se pudo parsear el error: ${parseError}`);
+          
+          // Intentar leer como texto si JSON falla
+          try {
+            const errorText = await response.text();
+            if (preferences.debug) {
+              addDebugLog('=== DEBUG ERROR TEXT ===');
+              addDebugLog(`Error Text: ${errorText}`);
+              addDebugLog('========================');
+            }
+          } catch (textError) {
+            addDebugLog(`No se pudo leer el error como texto: ${textError}`);
+          }
         }
         throw new Error(errorMessage);
       }
 
       const data: MathpixResponse = await response.json();
+      
+      if (preferences.debug) {
+        addDebugLog('=== DEBUG SUCCESS RESPONSE ===');
+        addDebugLog(`Response Body: ${JSON.stringify(data, null, 2)}`);
+        addDebugLog('==============================');
+      }
+      
+      // Verificar si hay errores en la respuesta (Mathpix puede devolver 200 pero con error en el body)
+      if (data.error) {
+        const errorMessage = data.error_info?.message || data.error;
+        addDebugLog(`Error en respuesta de Mathpix: ${errorMessage}`);
+        throw new Error(`Mathpix: ${errorMessage}`);
+      }
+      
       addDebugLog(`Procesamiento exitoso. Confianza: ${Math.round(data.confidence_rate * 100)}%`);
       setResult(data);
     } catch (err) {
@@ -434,12 +514,17 @@ const MathpixPhotoOCR: React.FC = () => {
         <div className="bg-gray-700 rounded-lg p-6">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-medium text-white">📹 Cámara</h3>
-            <button
-              onClick={() => setShowDebugInfo(!showDebugInfo)}
-              className="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded transition-colors"
-            >
-              {showDebugInfo ? 'Ocultar Debug' : 'Mostrar Debug'}
-            </button>
+            {preferences.debug && (
+              <div className="flex items-center space-x-2">
+                <span className="text-xs bg-green-500 text-white px-2 py-1 rounded">DEBUG ON</span>
+                <button
+                  onClick={() => setDebugLogs([])}
+                  className="text-xs px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                >
+                  Limpiar Logs
+                </button>
+              </div>
+            )}
           </div>
           
           <div className="flex flex-wrap gap-3 justify-center mb-4">
@@ -505,14 +590,49 @@ const MathpixPhotoOCR: React.FC = () => {
             </div>
           )}
 
-          {/* Información de debug */}
-          {showDebugInfo && (
+          {/* Información de debug - solo se muestra si debug está activado */}
+          {preferences.debug && (
             <div className="mt-4 p-4 bg-gray-800 rounded-lg">
-              <h4 className="text-sm font-medium text-gray-300 mb-2">Debug Info:</h4>
-              <div className="text-xs text-gray-400 space-y-1 max-h-32 overflow-y-auto">
-                {debugLogs.map((log, index) => (
-                  <div key={index}>{log}</div>
-                ))}
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-sm font-medium text-gray-300">Debug Info:</h4>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs bg-green-600 text-white px-2 py-1 rounded">DEBUG ON</span>
+                  <button
+                    onClick={() => setDebugLogs([])}
+                    className="text-xs px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+              </div>
+              <div className="text-xs text-gray-400 space-y-1 max-h-48 overflow-y-auto font-mono">
+                {debugLogs.length === 0 ? (
+                  <div className="text-gray-500 italic">No hay logs de debug disponibles</div>
+                ) : (
+                  debugLogs.map((log, index) => {
+                    // Detectar diferentes tipos de logs para colorearlos
+                    let logClass = 'text-gray-400';
+                    if (log.includes('ERROR') || log.includes('Error')) {
+                      logClass = 'text-red-400';
+                    } else if (log.includes('=== DEBUG')) {
+                      logClass = 'text-yellow-400 font-bold';
+                    } else if (log.includes('SUCCESS') || log.includes('exitoso')) {
+                      logClass = 'text-green-400';
+                    } else if (log.includes('WARNING') || log.includes('Warning')) {
+                      logClass = 'text-yellow-300';
+                    }
+                    
+                    return (
+                      <div key={index} className={logClass}>
+                        {log}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <div className="mt-2 p-2 bg-blue-900/30 border border-blue-500 rounded text-xs text-blue-300">
+                <strong>💡 Debug Mode:</strong> Se muestra información detallada de requests y respuestas. 
+                Ve a Configuración para desactivar.
               </div>
             </div>
           )}

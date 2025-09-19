@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useCredentials } from '../../hooks/useCredentials';
+import { usePreferences } from '../../hooks/usePreferences';
 
 interface MathpixResponse {
   text: string;
@@ -22,6 +23,7 @@ interface MathpixResponse {
 
 const MathpixOCR: React.FC = () => {
   const { getCredentialByKey, isLoading } = useCredentials();
+  const { preferences } = usePreferences();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -108,6 +110,15 @@ const MathpixOCR: React.FC = () => {
     setResult(null);
 
     try {
+      // Mostrar información de debug si está activado
+      if (preferences.debug) {
+        console.log('=== DEBUG MATHPIX OCR REQUEST ===');
+        console.log('File name:', selectedFile.name);
+        console.log('File size:', selectedFile.size, 'bytes');
+        console.log('File type:', selectedFile.type);
+        console.log('File last modified:', new Date(selectedFile.lastModified));
+      }
+
       // Convertir imagen a base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -121,30 +132,99 @@ const MathpixOCR: React.FC = () => {
         reader.readAsDataURL(selectedFile);
       });
 
+      // Preparar el request body
+      const requestBody = {
+        src: `data:image/${selectedFile.type.split('/')[1]};base64,${base64}`,
+        formats: ['text', 'latex_styled', 'data'],
+        data_options: {
+          include_asciimath: true,
+          include_latex: true,
+        },
+      };
+
+      // Preparar headers
+      const requestHeaders = {
+        'app_id': appId,
+        'app_key': apiKey,
+        'Content-Type': 'application/json',
+      };
+
+      // Mostrar información detallada del request si debug está activado
+      if (preferences.debug) {
+        console.log('Request URL:', 'https://api.mathpix.com/v3/text');
+        console.log('Request method:', 'POST');
+        console.log('Request headers:', requestHeaders);
+        console.log('Request body size:', JSON.stringify(requestBody).length, 'characters');
+        console.log('Image data size:', base64.length, 'characters');
+        console.log('Image size in MB:', (base64.length * 3 / 4 / (1024 * 1024)).toFixed(2));
+      }
+
       // Hacer request a Mathpix API
+      const startTime = Date.now();
       const response = await fetch('https://api.mathpix.com/v3/text', {
         method: 'POST',
-        headers: {
-          'app_id': appId,
-          'app_key': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          src: `data:image/${selectedFile.type.split('/')[1]};base64,${base64}`,
-          formats: ['text', 'latex_styled', 'data'],
-          data_options: {
-            include_asciimath: true,
-            include_latex: true,
-          },
-        }),
+        headers: requestHeaders,
+        body: JSON.stringify(requestBody),
       });
 
+      const endTime = Date.now();
+      const requestDuration = endTime - startTime;
+
+      // Mostrar información detallada de la respuesta si debug está activado
+      if (preferences.debug) {
+        console.log('=== DEBUG MATHPIX OCR RESPONSE ===');
+        console.log('Response status:', response.status);
+        console.log('Response status text:', response.statusText);
+        console.log('Request duration:', requestDuration, 'ms');
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+        console.log('Response OK:', response.ok);
+        console.log('Response redirected:', response.redirected);
+        console.log('Response type:', response.type);
+        console.log('Response URL:', response.url);
+      }
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`);
+        let errorMessage = `Error ${response.status}: ${response.statusText}`;
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+          
+          if (preferences.debug) {
+            console.log('=== DEBUG ERROR RESPONSE ===');
+            console.log('Error body:', errorData);
+            console.log('============================');
+          }
+        } catch (parseError) {
+          console.log('No se pudo parsear el error como JSON:', parseError);
+          
+          // Intentar leer como texto si JSON falla
+          try {
+            const errorText = await response.text();
+            if (preferences.debug) {
+              console.log('=== DEBUG ERROR TEXT ===');
+              console.log('Error text:', errorText);
+              console.log('========================');
+            }
+          } catch (textError) {
+            console.log('No se pudo leer el error como texto:', textError);
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data: MathpixResponse = await response.json();
+      
+      if (preferences.debug) {
+        console.log('=== DEBUG SUCCESS RESPONSE ===');
+        console.log('Response body:', data);
+        console.log('Confidence rate:', data.confidence_rate);
+        console.log('Is handwritten:', data.is_handwritten);
+        console.log('Is printed:', data.is_printed);
+        console.log('==============================');
+      }
+      
       setResult(data);
     } catch (err) {
       console.error('Error processing image:', err);
