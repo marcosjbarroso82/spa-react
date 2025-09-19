@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ImageInfo } from '../utils/imageUtils';
+import ImageModal from './ImageModal';
 
 interface ImageDisplayProps {
   imageSrc: string | null;
@@ -30,9 +31,15 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({
   showPlaceholder = true,
   placeholderText = 'No hay imagen'
 }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   const handleImageClick = () => {
-    if (imageSrc && onImageClick) {
-      onImageClick(imageSrc, title || 'Imagen');
+    if (imageSrc) {
+      if (onImageClick) {
+        onImageClick(imageSrc, title || 'Imagen');
+      } else {
+        setIsModalOpen(true);
+      }
     }
   };
 
@@ -58,11 +65,9 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({
           <img
             src={imageSrc}
             alt={title || 'Imagen'}
-            className={`w-full h-auto ${maxHeight} object-contain rounded-lg border border-gray-600 cursor-pointer hover:opacity-90 transition-opacity duration-200 ${
-              onImageClick ? 'cursor-pointer' : 'cursor-default'
-            }`}
+            className={`w-full h-auto ${maxHeight} object-contain rounded-lg border border-gray-600 cursor-pointer hover:opacity-90 transition-opacity duration-200`}
             onClick={handleImageClick}
-            title={onImageClick ? "Haz clic para ampliar" : undefined}
+            title="Haz clic para ampliar y hacer pan/zoom"
           />
         ) : showPlaceholder ? (
           <div className={`w-full h-64 bg-gray-600 rounded-lg flex flex-col items-center justify-center ${maxHeight}`}>
@@ -86,6 +91,16 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({
         <div className="mt-4 flex flex-wrap gap-2">
           {actions}
         </div>
+      )}
+
+      {/* Modal for image zoom/pan */}
+      {imageSrc && (
+        <ImageModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          imageSrc={imageSrc}
+          title={title}
+        />
       )}
     </div>
   );

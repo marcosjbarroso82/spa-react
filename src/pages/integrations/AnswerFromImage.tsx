@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import { useCredentials } from '../../hooks/useCredentials';
 import { useCameraConfig } from '../../hooks/useCameraConfig';
@@ -7,6 +7,8 @@ import ImageDisplay from '../../components/ImageDisplay';
 import FileUpload from '../../components/FileUpload';
 import CameraPreview from '../../components/CameraPreview';
 import ProcessingControls from '../../components/ProcessingControls';
+import ProcessingSteps, { ProcessingStep } from '../../components/ProcessingSteps';
+import ApiRequestDisplay, { ApiRequest } from '../../components/ApiRequestDisplay';
 
 type FlowiseResponse = any;
 
@@ -16,7 +18,7 @@ const HERRAMIENTAS_CON_RESPUESTAS_URL = 'http://localhost:3008/api/v1/prediction
 
 const AnswerFromImage: React.FC = () => {
   const { getCredentialByKey, isLoading: credentialsLoading } = useCredentials();
-  const { getVideoConstraints, getContinuousFocusConstraints } = useCameraConfig();
+  const { getContinuousFocusConstraints } = useCameraConfig();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [imageInfo, setImageInfo] = useState<ImageInfo[]>([]);
@@ -30,7 +32,9 @@ const AnswerFromImage: React.FC = () => {
   });
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [isFocusing, setIsFocusing] = useState(false);
+  const [isFocusing] = useState(false);
+  const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>([]);
+  const [apiRequests, setApiRequests] = useState<ApiRequest[]>([]);
   const webcamRef = useRef<Webcam>(null);
   const speechQueueRef = useRef<string[]>([]);
   const isSpeakingRef = useRef<boolean>(false);
@@ -40,7 +44,6 @@ const AnswerFromImage: React.FC = () => {
   const appId = getCredentialByKey('mathpix_app_id');
   const apiKey = getCredentialByKey('mathpix_api_key');
 
-  const canProcess = useMemo(() => selectedFiles.length > 0 && !!appId && !!apiKey && !credentialsLoading, [selectedFiles, appId, apiKey, credentialsLoading]);
 
   // Función para obtener información de la imagen (usando utilidad)
   const getImageInfo = useCallback(async (imageUrl: string): Promise<ImageInfo> => {
@@ -110,6 +113,33 @@ const AnswerFromImage: React.FC = () => {
       reader.readAsDataURL(blob);
     });
 
+  const addPhotoFromDataUrl = useCallback(async (dataUrl: string) => {
+    try {
+      // Obtener información de la imagen
+      const info = await getImageInfo(dataUrl);
+      setImageInfo(prev => [...prev, info]);
+      
+      // Convertir dataUrl a File
+      fetch(dataUrl)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          setSelectedFiles(prev => [...prev, file]);
+          setPreviewUrls(prev => [...prev, dataUrl]);
+          setOcrText(null);
+          setLecturas([]);
+          setError(null);
+        })
+        .catch(err => {
+          console.error('Error al convertir foto a archivo:', err);
+          setError('Error al procesar la foto capturada');
+        });
+    } catch (err) {
+      console.error('Error al obtener información de la imagen:', err);
+      setError('Error al procesar la imagen capturada');
+    }
+  }, [getImageInfo]);
+
   const capturePhoto = useCallback(async () => {
     if (!webcamRef.current) {
       console.error('Webcam no está disponible');
@@ -156,34 +186,7 @@ const AnswerFromImage: React.FC = () => {
     } finally {
       setIsCapturing(false);
     }
-  }, []);
-
-  const addPhotoFromDataUrl = useCallback(async (dataUrl: string) => {
-    try {
-      // Obtener información de la imagen
-      const info = await getImageInfo(dataUrl);
-      setImageInfo(prev => [...prev, info]);
-      
-      // Convertir dataUrl a File
-      fetch(dataUrl)
-        .then(res => res.blob())
-        .then(blob => {
-          const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
-          setSelectedFiles(prev => [...prev, file]);
-          setPreviewUrls(prev => [...prev, dataUrl]);
-          setOcrText(null);
-          setLecturas([]);
-          setError(null);
-        })
-        .catch(err => {
-          console.error('Error al convertir foto a archivo:', err);
-          setError('Error al procesar la foto capturada');
-        });
-    } catch (err) {
-      console.error('Error al obtener información de la imagen:', err);
-      setError('Error al procesar la imagen capturada');
-    }
-  }, [getImageInfo]);
+  }, [addPhotoFromDataUrl]);
 
   const onUserMedia = async (stream: MediaStream) => {
     console.log('Cámara conectada exitosamente');
@@ -268,6 +271,8 @@ const AnswerFromImage: React.FC = () => {
     setOcrText(null);
     setLecturas([]);
     setError(null);
+    setProcessingSteps([]);
+    setApiRequests([]);
   };
 
   const process = async () => {
@@ -275,11 +280,25 @@ const AnswerFromImage: React.FC = () => {
     setIsProcessing(true);
     setError(null);
     setLecturas([]);
+    setApiRequests([]);
+
+    // Inicializar pasos de procesamiento
+    const initialSteps: ProcessingStep[] = [
+      { id: 'ocr', title: 'Procesando OCR con Mathpix', status: 'pending', description: `Procesando ${selectedFiles.length} imagen(es)` },
+      { id: 'analiza', title: 'Analizando enunciado', status: 'pending', description: 'Enviando texto a Flowise para análisis' },
+      { id: 'rag', title: 'Consultando RAG con respuestas', status: 'pending', description: 'Obteniendo respuestas del sistema RAG' },
+      { id: 'herramientas', title: 'Consultando herramientas', status: 'pending', description: 'Obteniendo respuestas de herramientas especializadas' }
+    ];
+    setProcessingSteps(initialSteps);
 
     try {
       console.log(`[AnswerFromImage] Procesando ${selectedFiles.length} imágenes`);
       
-      // Procesar cada imagen secuencialmente con Mathpix
+      // Paso 1: Procesar OCR con Mathpix
+      setProcessingSteps(prev => prev.map(step => 
+        step.id === 'ocr' ? { ...step, status: 'in_progress' } : step
+      ));
+      
       const ocrResults: string[] = [];
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
@@ -295,6 +314,23 @@ const AnswerFromImage: React.FC = () => {
           reader.readAsDataURL(file);
         });
 
+        const mathpixRequest: ApiRequest = {
+          id: `mathpix-${i + 1}`,
+          name: `Mathpix OCR - Imagen ${i + 1}`,
+          url: 'https://api.mathpix.com/v3/text',
+          method: 'POST',
+          headers: {
+            'app_id': appId,
+            'app_key': apiKey,
+            'Content-Type': 'application/json',
+          },
+          body: {
+            src: `data:image/${file.type.split('/')[1]};base64,${base64}`,
+            formats: ['text'],
+          },
+          timestamp: new Date()
+        };
+
         const mathpixRes = await fetch('https://api.mathpix.com/v3/text', {
           method: 'POST',
           headers: {
@@ -308,12 +344,18 @@ const AnswerFromImage: React.FC = () => {
           }),
         });
         
+        const mathpixData = await mathpixRes.json();
+        mathpixRequest.status = mathpixRes.status;
+        mathpixRequest.response = mathpixData;
+        
         if (!mathpixRes.ok) {
-          const errData = await mathpixRes.json().catch(() => ({}));
-          throw new Error(errData.error || `Mathpix error ${mathpixRes.status} en imagen ${i + 1}`);
+          mathpixRequest.error = mathpixData.error || `Error ${mathpixRes.status}`;
+          setApiRequests(prev => [...prev, mathpixRequest]);
+          throw new Error(mathpixData.error || `Mathpix error ${mathpixRes.status} en imagen ${i + 1}`);
         }
         
-        const mathpixData = await mathpixRes.json();
+        setApiRequests(prev => [...prev, mathpixRequest]);
+        
         const text: string = mathpixData?.text || '';
         console.log(`[AnswerFromImage] OCR ${i + 1} texto:`, text);
         
@@ -325,6 +367,11 @@ const AnswerFromImage: React.FC = () => {
         }
       }
       
+      // Marcar OCR como completado
+      setProcessingSteps(prev => prev.map(step => 
+        step.id === 'ocr' ? { ...step, status: 'completed', description: `OCR completado: ${ocrResults.length} imagen(es) procesada(s)` } : step
+      ));
+      
       // Compaginar todos los resultados
       const compiledText = ocrResults.join('\n\n');
       setOcrText(compiledText);
@@ -334,7 +381,22 @@ const AnswerFromImage: React.FC = () => {
         throw new Error('Ninguna imagen devolvió texto');
       }
 
+      // Paso 2: Analizar enunciado
+      setProcessingSteps(prev => prev.map(step => 
+        step.id === 'analiza' ? { ...step, status: 'in_progress' } : step
+      ));
+
       console.log('[AnswerFromImage] Llamando Flowise: Analiza Enunciado');
+      const analizaRequest: ApiRequest = {
+        id: 'analiza-enunciado',
+        name: 'Analiza Enunciado',
+        url: ANALIZA_ENUNCIADO_URL,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: { question: compiledText },
+        timestamp: new Date()
+      };
+
       const analizaRes = await fetch(ANALIZA_ENUNCIADO_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -342,6 +404,11 @@ const AnswerFromImage: React.FC = () => {
       });
       const analizaContentType = analizaRes.headers.get('content-type') || '';
       const analizaData: FlowiseResponse = analizaContentType.includes('application/json') ? await analizaRes.json() : await analizaRes.text();
+      
+      analizaRequest.status = analizaRes.status;
+      analizaRequest.response = analizaData;
+      setApiRequests(prev => [...prev, analizaRequest]);
+      
       console.log('[AnswerFromImage] Analiza Enunciado status', analizaRes.status, 'body', analizaData);
 
       const agentDataList: any[] = (analizaData as any)?.response?.agentFlowExecutedData
@@ -363,8 +430,38 @@ const AnswerFromImage: React.FC = () => {
         throw new Error('No se encontró output en Analiza Enunciado');
       }
 
+      // Marcar análisis como completado
+      setProcessingSteps(prev => prev.map(step => 
+        step.id === 'analiza' ? { ...step, status: 'completed', description: 'Análisis completado' } : step
+      ));
+
+      // Paso 3 y 4: RAG y Herramientas en paralelo
+      setProcessingSteps(prev => prev.map(step => 
+        step.id === 'rag' || step.id === 'herramientas' ? { ...step, status: 'in_progress' } : step
+      ));
+
       console.log('[AnswerFromImage] Fan-out a RAG y Herramientas con output:', outputToSend);
       const payload = JSON.stringify({ question: outputToSend });
+
+      const ragRequest: ApiRequest = {
+        id: 'rag-respuestas',
+        name: 'RAG con Respuestas',
+        url: RAG_CON_RESPUESTAS_URL,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: { question: outputToSend },
+        timestamp: new Date()
+      };
+
+      const toolsRequest: ApiRequest = {
+        id: 'herramientas-respuestas',
+        name: 'Herramientas con Respuestas',
+        url: HERRAMIENTAS_CON_RESPUESTAS_URL,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: { question: outputToSend },
+        timestamp: new Date()
+      };
 
       const [ragRes, toolsRes] = await Promise.all([
         fetch(RAG_CON_RESPUESTAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }),
@@ -375,8 +472,22 @@ const AnswerFromImage: React.FC = () => {
       const ragData: FlowiseResponse = ragCt.includes('application/json') ? await ragRes.json() : await ragRes.text();
       const toolsData: FlowiseResponse = toolsCt.includes('application/json') ? await toolsRes.json() : await toolsRes.text();
 
+      ragRequest.status = ragRes.status;
+      ragRequest.response = ragData;
+      toolsRequest.status = toolsRes.status;
+      toolsRequest.response = toolsData;
+      
+      setApiRequests(prev => [...prev, ragRequest, toolsRequest]);
+
       console.log('[AnswerFromImage] RAG status', ragRes.status, 'body', ragData);
       console.log('[AnswerFromImage] Herramientas status', toolsRes.status, 'body', toolsData);
+
+      // Marcar RAG y herramientas como completados
+      setProcessingSteps(prev => prev.map(step => 
+        step.id === 'rag' ? { ...step, status: 'completed', description: 'RAG completado' } :
+        step.id === 'herramientas' ? { ...step, status: 'completed', description: 'Herramientas completadas' } :
+        step
+      ));
 
       const extractLectura = (data: any): string | null => {
         const list = data?.response?.agentFlowExecutedData ?? data?.agentFlowExecutedData;
@@ -411,6 +522,11 @@ const AnswerFromImage: React.FC = () => {
     } catch (err) {
       console.error('[AnswerFromImage] Error en el proceso', err);
       setError(err instanceof Error ? err.message : 'Error en el proceso');
+      
+      // Marcar el paso actual como error
+      setProcessingSteps(prev => prev.map(step => 
+        step.status === 'in_progress' ? { ...step, status: 'error', error: err instanceof Error ? err.message : 'Error desconocido' } : step
+      ));
     } finally {
       setIsProcessing(false);
     }
@@ -543,6 +659,16 @@ const AnswerFromImage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Progreso del procesamiento */}
+      {processingSteps.length > 0 && (
+        <ProcessingSteps steps={processingSteps} />
+      )}
+
+      {/* Requests de API */}
+      {apiRequests.length > 0 && (
+        <ApiRequestDisplay requests={apiRequests} />
+      )}
 
       {ocrText && (
         <div className="bg-gray-700 rounded-lg p-4">
