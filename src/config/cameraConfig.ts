@@ -65,12 +65,12 @@ export interface CameraConfig {
   };
 }
 
-// Configuración por defecto optimizada para texto pequeño de pantallas de notebook
+// Configuración por defecto optimizada para máxima resolución disponible
 export const defaultCameraConfig: CameraConfig = {
   resolution: {
-    width: 2560,        // Resolución alta para texto pequeño de pantallas
-    height: 1440,       // Mantiene proporción 16:9 con más píxeles
-    frameRate: 15,      // Frame rate bajo para estabilidad y menor tamaño
+    width: 3840,        // Resolución 4K para máxima calidad disponible
+    height: 2160,       // Mantiene proporción 16:9 con máxima resolución
+    frameRate: 30,      // Frame rate estándar para mejor calidad
     aspectRatio: 16/9   // Proporción estándar para pantallas
   },
   
@@ -129,9 +129,9 @@ export const cameraPresets: Record<string, Partial<CameraConfig>> = {
   // Para documentos físicos (texto grande)
   document: {
     resolution: {
-      width: 1920,
-      height: 1080,
-      frameRate: 15,
+      width: 2560,        // Resolución más alta para documentos
+      height: 1440,       // Mantiene proporción 16:9
+      frameRate: 30,      // Frame rate estándar
       aspectRatio: 16/9
     },
     quality: {
@@ -172,9 +172,9 @@ export const cameraPresets: Record<string, Partial<CameraConfig>> = {
   // Para móviles con poca memoria
   mobile: {
     resolution: {
-      width: 1280,
-      height: 720,
-      frameRate: 15,
+      width: 1920,        // Resolución HD para móviles
+      height: 1080,       // Mantiene proporción 16:9
+      frameRate: 30,      // Frame rate estándar
       aspectRatio: 16/9
     },
     quality: {

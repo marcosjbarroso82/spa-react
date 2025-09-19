@@ -74,16 +74,17 @@ export const useCameraConfig = () => {
     setConfig(defaultConfig);
   }, []);
 
-  // Obtener configuraciones de video constraints
+  // Obtener configuraciones de video constraints - siempre máxima resolución disponible
   const getVideoConstraints = useCallback(() => {
     return {
       facingMode: { ideal: 'environment' as const },
-      width: { ideal: config.resolution.width },
-      height: { ideal: config.resolution.height },
-      frameRate: { ideal: config.resolution.frameRate },
-      aspectRatio: { ideal: config.resolution.aspectRatio }
+      // Siempre usar máxima resolución disponible de la cámara
+      width: { ideal: 4096, max: 4096 },
+      height: { ideal: 4096, max: 4096 },
+      frameRate: { ideal: 60, max: 60 },
+      aspectRatio: { ideal: 16/9 }
     };
-  }, [config.resolution]);
+  }, []);
 
   // Obtener configuraciones de enfoque continuo
   const getContinuousFocusConstraints = useCallback(() => {

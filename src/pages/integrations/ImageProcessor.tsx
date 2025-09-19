@@ -15,7 +15,6 @@ interface ImageInfo {
 const ImageProcessor: React.FC = () => {
   const {
     config: cameraConfig,
-    updateResolution,
     updateQuality,
     updateProcessing,
     applyPreset,
@@ -394,78 +393,23 @@ const ImageProcessor: React.FC = () => {
                   ))}
                 </div>
                 <div className="text-xs text-gray-400 space-y-1">
-                  <p><strong>📄 Documento:</strong> Para documentos físicos (papel, libros) - resolución media, enfoque cercano</p>
-                  <p><strong>📱 Pantalla:</strong> Para pantallas de computadora - alta resolución, optimizado para texto pequeño</p>
-                  <p><strong>📱 Móvil:</strong> Para dispositivos con poca memoria - resolución baja, calidad reducida</p>
+                  <p><strong>📄 Documento:</strong> Para documentos físicos (papel, libros) - enfoque cercano, filtros optimizados</p>
+                  <p><strong>📱 Pantalla:</strong> Para pantallas de computadora - filtros para texto pequeño, contraste alto</p>
+                  <p><strong>📱 Móvil:</strong> Para dispositivos con poca memoria - calidad reducida, procesamiento ligero</p>
                 </div>
               </div>
 
-              {/* Configuración de Cámara (Solo para captura) */}
-              <div className="border-l-4 border-yellow-500 pl-4">
-                <h3 className="text-lg font-medium text-white mb-2">📷 Configuración de Cámara</h3>
+              {/* Información de Cámara */}
+              <div className="border-l-4 border-green-500 pl-4">
+                <h3 className="text-lg font-medium text-white mb-2">📷 Cámara Automática</h3>
                 <p className="text-xs text-gray-400 mb-3">
-                  ⚠️ <strong>Importante:</strong> Estos parámetros solo afectan cuando usas la cámara para capturar imágenes. 
-                  <strong>NO tienen efecto</strong> en imágenes que subes desde archivos.
+                  ✅ <strong>Optimización automática:</strong> La cámara usa automáticamente la máxima resolución disponible de tu dispositivo. 
+                  <strong>No necesitas configurar nada</strong> - la aplicación detecta y usa la mejor calidad posible.
                 </p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">
-                      Ancho (px)
-                    </label>
-                    <p className="text-xs text-gray-400 mb-2">Resolución horizontal de la cámara</p>
-                    <input
-                      type="number"
-                      value={cameraConfig.resolution.width}
-                      onChange={(e) => updateResolution({ width: parseInt(e.target.value) || 1920 })}
-                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
-                      min="640"
-                      max="4096"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">
-                      Alto (px)
-                    </label>
-                    <p className="text-xs text-gray-400 mb-2">Resolución vertical de la cámara</p>
-                    <input
-                      type="number"
-                      value={cameraConfig.resolution.height}
-                      onChange={(e) => updateResolution({ height: parseInt(e.target.value) || 1080 })}
-                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
-                      min="480"
-                      max="2160"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">
-                      Frame Rate (fps)
-                    </label>
-                    <p className="text-xs text-gray-400 mb-2">Fotogramas por segundo de la cámara</p>
-                    <input
-                      type="number"
-                      value={cameraConfig.resolution.frameRate}
-                      onChange={(e) => updateResolution({ frameRate: parseInt(e.target.value) || 15 })}
-                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
-                      min="1"
-                      max="60"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">
-                      Aspect Ratio
-                    </label>
-                    <p className="text-xs text-gray-400 mb-2">Proporción de la imagen capturada</p>
-                    <select
-                      value={cameraConfig.resolution.aspectRatio}
-                      onChange={(e) => updateResolution({ aspectRatio: parseFloat(e.target.value) })}
-                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value={16/9}>16:9 (Widescreen)</option>
-                      <option value={4/3}>4:3 (Estándar)</option>
-                      <option value={1}>1:1 (Cuadrado)</option>
-                    </select>
-                  </div>
+                <div className="bg-green-900 bg-opacity-30 border border-green-600 rounded-lg p-3">
+                  <p className="text-sm text-green-300">
+                    🚀 <strong>Beneficios:</strong> Máxima resolución, mejor calidad de imagen, mejor OCR, sin configuración manual.
+                  </p>
                 </div>
               </div>
 

@@ -11,6 +11,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, onClose }
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isStabilizing, setIsStabilizing] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -36,13 +37,13 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, onClose }
       const videoConstraints = getVideoConstraints();
       
       // Crear constraints básicos para getUserMedia
+      // Usar 'ideal' para permitir la máxima resolución disponible de la cámara
       const constraints: MediaStreamConstraints = {
         video: {
-          facingMode: videoConstraints.facingMode,
-          width: videoConstraints.width,
-          height: videoConstraints.height,
-          frameRate: videoConstraints.frameRate,
-          aspectRatio: videoConstraints.aspectRatio
+          ...videoConstraints,
+          width: { ...videoConstraints.width, max: 4096 },
+          height: { ...videoConstraints.height, max: 4096 },
+          frameRate: { ...videoConstraints.frameRate, max: 60 }
         },
         audio: false
       };
@@ -99,6 +100,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, onClose }
     }
     setIsStreaming(false);
     setIsLoading(false);
+    setIsStabilizing(false);
   }, []);
 
   // Capturar imagen
@@ -108,6 +110,14 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, onClose }
     setIsCapturing(true);
     
     try {
+      // Aplicar tiempo de estabilización antes de capturar
+      const stabilizationTime = cameraConfig.focus.stabilizationTime;
+      if (stabilizationTime > 0) {
+        setIsStabilizing(true);
+        await new Promise(resolve => setTimeout(resolve, stabilizationTime));
+        setIsStabilizing(false);
+      }
+
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
@@ -142,7 +152,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, onClose }
     } finally {
       setIsCapturing(false);
     }
-  }, [isCapturing, cameraConfig.quality.screenshotQuality, onImageCapture, stopCamera]);
+  }, [isCapturing, cameraConfig.quality.screenshotQuality, cameraConfig.focus.stabilizationTime, onImageCapture, stopCamera]);
 
   // Inicializar componente
   useEffect(() => {
@@ -152,7 +162,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, onClose }
     return () => {
       stopCamera();
     };
-  }, []);
+  }, []); // Intentionally empty - only run on mount/unmount
 
   return (
     <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center">
@@ -191,19 +201,29 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, onClose }
             />
             
             {/* Overlay de carga */}
-            {isLoading && (
-              <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center">
-                <div className="text-white text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
-                  <p>Iniciando cámara...</p>
-                </div>
-              </div>
-            )}
+                    {isLoading && (
+                      <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center">
+                        <div className="text-white text-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
+                          <p>Iniciando cámara...</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {isStabilizing && (
+                      <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center">
+                        <div className="text-white text-center">
+                          <div className="animate-pulse rounded-full h-8 w-8 border-2 border-yellow-400 mx-auto mb-2"></div>
+                          <p>Estabilizando... {cameraConfig.focus.stabilizationTime}ms</p>
+                        </div>
+                      </div>
+                    )}
             
             {/* Overlay de información */}
-            {isStreaming && (
+            {isStreaming && videoRef.current && (
               <div className="absolute top-4 left-4 bg-black bg-opacity-70 text-white p-2 rounded text-sm">
-                <p>Resolución: {cameraConfig.resolution.width}x{cameraConfig.resolution.height}</p>
+                <p>Resolución Real: {videoRef.current.videoWidth}x{videoRef.current.videoHeight}</p>
+                <p>Configurada: {cameraConfig.resolution.width}x{cameraConfig.resolution.height}</p>
                 <p>Calidad: {(cameraConfig.quality.screenshotQuality * 100).toFixed(0)}%</p>
                 <p>Enfoque: {cameraConfig.focus.distance}m</p>
               </div>
@@ -228,13 +248,13 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onImageCapture, onClose }
               </button>
             ) : (
               <>
-                <button
-                  onClick={captureImage}
-                  disabled={isCapturing}
-                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
-                >
-                  {isCapturing ? '⏳ Capturando...' : '📸 Capturar'}
-                </button>
+                        <button
+                          onClick={captureImage}
+                          disabled={isCapturing || isStabilizing}
+                          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+                        >
+                          {isStabilizing ? '⏳ Estabilizando...' : isCapturing ? '⏳ Capturando...' : '📸 Capturar'}
+                        </button>
                 <button
                   onClick={stopCamera}
                   className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
