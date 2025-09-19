@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { useCameraConfig } from '../../hooks/useCameraConfig';
 import ImageModal from '../../components/ImageModal';
+import CameraCapture from '../../components/CameraCapture';
 
 interface ImageInfo {
   size: string;
@@ -29,6 +30,7 @@ const ImageProcessor: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [modalImage, setModalImage] = useState<{ src: string; alt: string; title: string } | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -190,6 +192,32 @@ const ImageProcessor: React.FC = () => {
     setModalImage(null);
   };
 
+  // Función para abrir cámara
+  const openCamera = () => {
+    setShowCamera(true);
+  };
+
+  // Función para cerrar cámara
+  const closeCamera = () => {
+    setShowCamera(false);
+  };
+
+  // Función para manejar imagen capturada
+  const handleImageCaptured = useCallback(async (dataUrl: string) => {
+    setOriginalImage(dataUrl);
+    
+    // Obtener información de la imagen capturada
+    const info = await getImageInfo(dataUrl);
+    setOriginalInfo(info);
+    
+    // Limpiar imagen procesada anterior
+    setProcessedImage(null);
+    setProcessedInfo(null);
+    
+    setMessage({ type: 'success', text: 'Imagen capturada correctamente. Haz clic en "Aplicar" para procesarla.' });
+    setShowCamera(false);
+  }, [getImageInfo]);
+
   // Función para limpiar todo
   const clearAll = () => {
     setOriginalImage(null);
@@ -198,6 +226,7 @@ const ImageProcessor: React.FC = () => {
     setProcessedInfo(null);
     setMessage(null);
     setModalImage(null);
+    setShowCamera(false);
     setIsProcessing(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -238,7 +267,13 @@ const ImageProcessor: React.FC = () => {
                   onClick={() => fileInputRef.current?.click()}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
                 >
-                  📷 Seleccionar Imagen
+                  📁 Seleccionar Archivo
+                </button>
+                <button
+                  onClick={openCamera}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+                >
+                  📷 Usar Cámara
                 </button>
                 {originalImage && (
                   <button
@@ -255,6 +290,9 @@ const ImageProcessor: React.FC = () => {
                 >
                   🗑️ Limpiar Todo
                 </button>
+              </div>
+              <div className="mt-3 text-sm text-gray-400">
+                <p>💡 <strong>Opciones:</strong> Sube un archivo desde tu dispositivo o usa la cámara con las configuraciones actuales</p>
               </div>
             </div>
           </div>
@@ -695,6 +733,14 @@ const ImageProcessor: React.FC = () => {
           imageSrc={modalImage.src}
           imageAlt={modalImage.alt}
           title={modalImage.title}
+        />
+      )}
+
+      {/* Cámara */}
+      {showCamera && (
+        <CameraCapture
+          onImageCapture={handleImageCaptured}
+          onClose={closeCamera}
         />
       )}
     </div>
