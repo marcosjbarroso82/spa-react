@@ -3,13 +3,15 @@ import { useState, useEffect } from 'react';
 export interface UserPreferences {
   imageInputMode: 'file' | 'camera';
   autoRead: boolean;
+  debug: boolean;
 }
 
 const PREFERENCES_STORAGE_KEY = 'app_preferences';
 
 const defaultPreferences: UserPreferences = {
   imageInputMode: 'file',
-  autoRead: false
+  autoRead: false,
+  debug: false
 };
 
 export const usePreferences = () => {

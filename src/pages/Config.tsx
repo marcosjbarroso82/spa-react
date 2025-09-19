@@ -107,7 +107,7 @@ const Config: React.FC = () => {
     setMessage(null);
   };
 
-  const handlePreferenceChange = (key: 'imageInputMode' | 'autoRead', value: any) => {
+  const handlePreferenceChange = (key: 'imageInputMode' | 'autoRead' | 'debug', value: any) => {
     updatePreference(key, value);
     setMessage({ type: 'success', text: 'Configuración actualizada' });
   };
@@ -147,7 +147,7 @@ const Config: React.FC = () => {
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-white mb-4">⚙️ Configuración</h2>
             <div className="bg-gray-700 rounded-lg p-4 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Modo de entrada de imagen */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -177,10 +177,29 @@ const Config: React.FC = () => {
                         onChange={(e) => handlePreferenceChange('autoRead', e.target.checked)}
                         className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500 focus:ring-2"
                       />
-                      <span className="text-sm text-gray-300">🔊 Activar lectura automática de respuestas</span>
+                      <span className="text-sm text-gray-300">🔊 Activar lectura automática</span>
                     </label>
                   </div>
                   <p className="text-xs text-gray-400 mt-1">Lee automáticamente las respuestas con síntesis de voz</p>
+                </div>
+
+                {/* Modo Debug */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Modo Debug
+                  </label>
+                  <div className="flex items-center space-x-3">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={preferences.debug}
+                        onChange={(e) => handlePreferenceChange('debug', e.target.checked)}
+                        className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                      <span className="text-sm text-gray-300">🐛 Activar modo debug</span>
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">Muestra información técnica y de desarrollo</p>
                 </div>
               </div>
 
@@ -370,6 +389,7 @@ const Config: React.FC = () => {
                 <ul className="text-xs text-gray-400 space-y-1">
                   <li>• Modo de entrada predeterminado</li>
                   <li>• Lectura automática de respuestas</li>
+                  <li>• Modo debug para desarrolladores</li>
                   <li>• Se guarda en localStorage</li>
                 </ul>
               </div>

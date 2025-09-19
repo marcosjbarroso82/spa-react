@@ -535,10 +535,10 @@ const AnswerFromImageUX: React.FC = () => {
         )}
 
 
-        {/* Preview de imágenes */}
-        {previewUrls.length > 0 && (
+        {/* Preview de imágenes - Solo en modo debug */}
+        {preferences.debug && previewUrls.length > 0 && (
           <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-300">Imágenes seleccionadas ({previewUrls.length}):</h4>
+            <h4 className="text-sm font-medium text-gray-300">🐛 Imágenes seleccionadas ({previewUrls.length}):</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {previewUrls.map((url, index) => (
                 <div key={index} className="relative space-y-2">
@@ -607,9 +607,10 @@ const AnswerFromImageUX: React.FC = () => {
       {/* Resultados */}
       {showResults && (
         <div className="space-y-4">
-          {ocrText && (
+          {/* Texto OCR - Solo en modo debug */}
+          {preferences.debug && ocrText && (
             <div className="bg-gray-700 rounded-lg p-4">
-              <h3 className="text-lg font-medium text-white mb-2">Texto OCR</h3>
+              <h3 className="text-lg font-medium text-white mb-2">🐛 Texto OCR</h3>
               <div className="bg-gray-800 rounded p-3 font-mono text-sm text-white whitespace-pre-wrap">{ocrText}</div>
             </div>
           )}
