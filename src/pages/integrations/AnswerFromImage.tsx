@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { useCredentials } from '../../hooks/useCredentials';
 import Webcam from 'react-webcam';
+import { useCameraConfig } from '../../hooks/useCameraConfig';
 
 type FlowiseResponse = any;
 
@@ -10,6 +11,7 @@ const HERRAMIENTAS_CON_RESPUESTAS_URL = 'http://localhost:3008/api/v1/prediction
 
 const AnswerFromImage: React.FC = () => {
   const { getCredentialByKey, isLoading: credentialsLoading } = useCredentials();
+  const { getVideoConstraints, getContinuousFocusConstraints } = useCameraConfig();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -170,13 +172,7 @@ const AnswerFromImage: React.FC = () => {
     try {
       const track = stream.getVideoTracks()[0];
       // Solicitar autoenfoque y ajustes continuos cuando sea posible
-      await (track as any).applyConstraints({
-        advanced: [
-          { focusMode: 'continuous' },
-          { whiteBalanceMode: 'continuous' },
-          { exposureMode: 'continuous' }
-        ]
-      } as any).catch(() => {});
+      await (track as any).applyConstraints(getContinuousFocusConstraints() as any).catch(() => {});
 
       if ('ImageCapture' in window) {
         try {
@@ -464,13 +460,7 @@ const AnswerFromImage: React.FC = () => {
                 audio={false}
                 screenshotFormat="image/jpeg"
                 screenshotQuality={0.85}  // Calidad alta para preservar detalles de texto pequeño
-                videoConstraints={{
-                  facingMode: { ideal: 'environment' },
-                  width: { ideal: 2560 },        // Resolución alta para texto pequeño de pantallas
-                  height: { ideal: 1440 },       // Mantiene proporción 16:9 con más píxeles
-                  frameRate: { ideal: 15 },      // Frame rate bajo para estabilidad y menor tamaño
-                  aspectRatio: { ideal: 16/9 }   // Proporción estándar para pantallas
-                }}
+                videoConstraints={getVideoConstraints()}
                 onUserMedia={onUserMedia}
                 onUserMediaError={onUserMediaError}
                 className="w-full h-auto max-h-64 object-cover"

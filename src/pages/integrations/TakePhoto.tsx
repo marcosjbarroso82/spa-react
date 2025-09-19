@@ -1,7 +1,9 @@
 import React, { useState, useRef, useCallback } from 'react';
 import Webcam from 'react-webcam';
+import { useCameraConfig } from '../../hooks/useCameraConfig';
 
 const TakePhoto: React.FC = () => {
+  const { getVideoConstraints, getContinuousFocusConstraints } = useCameraConfig();
   const [photo, setPhoto] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,13 +107,7 @@ const TakePhoto: React.FC = () => {
     try {
       const track = stream.getVideoTracks()[0];
       // Solicitar autoenfoque y ajustes continuos cuando sea posible (no estándar en TS)
-      await (track as any).applyConstraints({
-        advanced: [
-          { focusMode: 'continuous' },
-          { whiteBalanceMode: 'continuous' },
-          { exposureMode: 'continuous' }
-        ]
-      } as any).catch(() => {});
+      await (track as any).applyConstraints(getContinuousFocusConstraints() as any).catch(() => {});
 
       if ('ImageCapture' in window) {
         try {
@@ -182,13 +178,7 @@ const TakePhoto: React.FC = () => {
               audio={false}
               screenshotFormat="image/jpeg"
               screenshotQuality={0.85}  // Calidad alta para preservar detalles de texto pequeño
-              videoConstraints={{
-                facingMode: { ideal: 'environment' },
-                width: { ideal: 2560 },        // Resolución alta para texto pequeño de pantallas
-                height: { ideal: 1440 },       // Mantiene proporción 16:9 con más píxeles
-                frameRate: { ideal: 15 },      // Frame rate bajo para estabilidad y menor tamaño
-                aspectRatio: { ideal: 16/9 }   // Proporción estándar para pantallas
-              }}
+              videoConstraints={getVideoConstraints()}
               onUserMedia={onUserMedia}
               onUserMediaError={onUserMediaError}
               className="w-full h-auto max-h-96 object-cover"

@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import { useCredentials } from '../../hooks/useCredentials';
 import { usePreferences } from '../../hooks/usePreferences';
+import { useCameraConfig } from '../../hooks/useCameraConfig';
 
 interface MathpixResponse {
   text: string;
@@ -31,6 +32,14 @@ interface MathpixResponse {
 const MathpixPhotoOCR: React.FC = () => {
   const { getCredentialByKey, isLoading } = useCredentials();
   const { preferences } = usePreferences();
+  const { 
+    config: cameraConfig,
+    getVideoConstraints,
+    getContinuousFocusConstraints,
+    getSingleShotFocusConstraints,
+    getProcessingFilters,
+    getGrayscaleWeights
+  } = useCameraConfig();
   
   // Estados para la cámara
   const [photo, setPhoto] = useState<string | null>(null);
@@ -82,7 +91,7 @@ const MathpixPhotoOCR: React.FC = () => {
    * - Compresión optimizada para OCR manteniendo detalles
    * - Filtros específicos para pantallas (anti-aliasing, sharpening)
    */
-  const optimizeImageForOCR = (dataUrl: string, maxWidth: number = 2560, maxHeight: number = 1440, quality: number = 0.8): Promise<string> => {
+  const optimizeImageForOCR = useCallback((dataUrl: string): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -95,6 +104,7 @@ const MathpixPhotoOCR: React.FC = () => {
         }
 
         let { width, height } = img;
+        const { maxWidth, maxHeight } = cameraConfig.quality;
 
         // Calcular nuevas dimensiones manteniendo aspect ratio
         if (width > height) {
@@ -116,12 +126,8 @@ const MathpixPhotoOCR: React.FC = () => {
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         
-        // Filtros optimizados para texto pequeño de pantallas:
-        // - Alto contraste para mejorar legibilidad de caracteres pequeños
-        // - Brillo ajustado para compensar reflejos de pantalla
-        // - Baja saturación (pantallas son RGB, no necesitan color)
-        // - Nitidez mejorada para caracteres pequeños
-        ctx.filter = 'contrast(1.5) brightness(1.2) saturate(0.1)';
+        // Filtros optimizados para texto pequeño de pantallas usando configuración centralizada
+        ctx.filter = getProcessingFilters();
         
         ctx.drawImage(img, 0, 0, width, height);
         
@@ -129,10 +135,10 @@ const MathpixPhotoOCR: React.FC = () => {
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
         
-        // Usar coeficientes optimizados para pantallas RGB (más peso al verde)
-        // Esto mejora la legibilidad de texto en pantallas LCD/LED
+        // Usar coeficientes optimizados para pantallas RGB usando configuración centralizada
+        const weights = getGrayscaleWeights();
         for (let i = 0; i < data.length; i += 4) {
-          const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+          const gray = data[i] * weights.red + data[i + 1] * weights.green + data[i + 2] * weights.blue;
           data[i] = gray;     // R
           data[i + 1] = gray; // G
           data[i + 2] = gray; // B
@@ -142,12 +148,12 @@ const MathpixPhotoOCR: React.FC = () => {
         ctx.putImageData(imageData, 0, 0);
         
         // Exportar como JPEG con alta calidad para preservar detalles de texto pequeño
-        const optimizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        const optimizedDataUrl = canvas.toDataURL('image/jpeg', cameraConfig.quality.optimizationQuality);
         resolve(optimizedDataUrl);
       };
       img.src = dataUrl;
     });
-  };
+  }, [cameraConfig.quality, getProcessingFilters, getGrayscaleWeights]);
 
   /**
    * Función para redimensionar imagen manteniendo calidad para OCR
@@ -363,18 +369,7 @@ const MathpixPhotoOCR: React.FC = () => {
       if (!track) return false;
 
       // Configuraciones optimizadas para capturar texto pequeño de pantallas de notebook
-      await track.applyConstraints({
-        advanced: [
-          { focusMode: 'single-shot' },        // Enfoque único y preciso para máxima nitidez
-          { focusDistance: 0.4 },              // 40cm - distancia típica celular-pantalla de notebook
-          { exposureMode: 'single-shot' },     // Exposición fija para evitar parpadeos de pantalla
-          { whiteBalanceMode: 'single-shot' }, // Balance fijo para pantallas (evita cambios de color)
-          { brightness: { ideal: 0.35 } },     // Reducir brillo para evitar reflejos de pantalla
-          { contrast: { ideal: 0.85 } },       // Alto contraste para mejorar legibilidad de texto pequeño
-          { saturation: { ideal: 0.15 } },     // Muy baja saturación (pantallas son RGB, no necesitan color)
-          { sharpness: { ideal: 0.95 } }       // Máxima nitidez para caracteres pequeños
-        ]
-      } as any);
+      await track.applyConstraints(getSingleShotFocusConstraints() as any);
 
       addDebugLog('Enfoque optimizado para pantalla de notebook aplicado');
       return true;
@@ -382,7 +377,7 @@ const MathpixPhotoOCR: React.FC = () => {
       addDebugLog(`Error al enfocar: ${error}`);
       return false;
     }
-  }, []);
+  }, [getSingleShotFocusConstraints]);
 
   // Funciones de la cámara
   const startCamera = () => {
@@ -426,7 +421,7 @@ const MathpixPhotoOCR: React.FC = () => {
       if (focused) {
         // Esperar más tiempo para que el enfoque se estabilice en pantallas
         // Las pantallas tienen más variaciones de brillo que documentos físicos
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, cameraConfig.focus.stabilizationTime));
         addDebugLog('Enfoque para pantalla completado');
       }
 
@@ -497,7 +492,7 @@ const MathpixPhotoOCR: React.FC = () => {
       setIsCapturing(false);
       setIsFocusing(false);
     }
-  }, [focusCamera]);
+  }, [focusCamera, cameraConfig.focus.stabilizationTime, optimizeImageForOCR]);
 
   const clearPhoto = () => {
     setPhoto(null);
@@ -515,17 +510,7 @@ const MathpixPhotoOCR: React.FC = () => {
     try {
       const track = stream.getVideoTracks()[0];
       // Configuraciones continuas optimizadas para pantallas de notebook
-      await track.applyConstraints({
-        advanced: [
-          { focusMode: 'continuous' },        // Enfoque continuo para mantener texto nítido
-          { whiteBalanceMode: 'continuous' }, // Balance continuo para adaptarse a diferentes pantallas
-          { exposureMode: 'continuous' },     // Exposición continua para cambios de brillo
-          { brightness: { ideal: 0.4 } },     // Brillo reducido para evitar reflejos
-          { contrast: { ideal: 0.8 } },       // Alto contraste para texto pequeño
-          { saturation: { ideal: 0.2 } },     // Baja saturación para pantallas RGB
-          { sharpness: { ideal: 0.9 } }       // Alta nitidez para caracteres pequeños
-        ]
-      } as any).catch(() => {});
+      await track.applyConstraints(getContinuousFocusConstraints() as any).catch(() => {});
 
       if ('ImageCapture' in window) {
         try {
@@ -845,14 +830,8 @@ const MathpixPhotoOCR: React.FC = () => {
                 ref={webcamRef}
                 audio={false}
                 screenshotFormat="image/jpeg"
-                screenshotQuality={0.85}  // Calidad alta para preservar detalles de texto pequeño
-                videoConstraints={{
-                  facingMode: { ideal: 'environment' },
-                  width: { ideal: 2560 },        // Resolución alta para texto pequeño de pantallas
-                  height: { ideal: 1440 },       // Mantiene proporción 16:9 con más píxeles
-                  frameRate: { ideal: 15 },      // Frame rate bajo para estabilidad y menor tamaño
-                  aspectRatio: { ideal: 16/9 }   // Proporción estándar para pantallas
-                }}
+                screenshotQuality={cameraConfig.quality.screenshotQuality}
+                videoConstraints={getVideoConstraints()}
                 onUserMedia={onUserMedia}
                 onUserMediaError={onUserMediaError}
                 className="w-full h-auto max-h-96 object-cover"

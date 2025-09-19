@@ -3,6 +3,7 @@ import Webcam from 'react-webcam';
 import { useCredentials } from '../../hooks/useCredentials';
 import { useVariables } from '../../hooks/useVariables';
 import { usePreferences } from '../../hooks/usePreferences';
+import { useCameraConfig } from '../../hooks/useCameraConfig';
 
 interface FlowiseResponse {
   response?: {
@@ -18,6 +19,7 @@ const AnswerFromImageUX: React.FC = () => {
   const { getCredentialByKey, isLoading: credentialsLoading } = useCredentials();
   const { getVariableByKey, isLoading: variablesLoading } = useVariables();
   const { preferences, isLoading: preferencesLoading } = usePreferences();
+  const { getVideoConstraints, getContinuousFocusConstraints } = useCameraConfig();
   const [inputMode, setInputMode] = useState<InputMode>('file');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
@@ -378,13 +380,7 @@ const AnswerFromImageUX: React.FC = () => {
 
     try {
       const track = stream.getVideoTracks()[0];
-      await (track as any).applyConstraints({
-        advanced: [
-          { focusMode: 'continuous' },
-          { whiteBalanceMode: 'continuous' },
-          { exposureMode: 'continuous' }
-        ]
-      } as any).catch(() => {});
+      await (track as any).applyConstraints(getContinuousFocusConstraints() as any).catch(() => {});
 
       if ('ImageCapture' in window) {
         try {
@@ -737,13 +733,7 @@ const AnswerFromImageUX: React.FC = () => {
                   audio={false}
                   screenshotFormat="image/jpeg"
                   screenshotQuality={0.85}  // Calidad alta para preservar detalles de texto pequeño
-                  videoConstraints={{
-                    facingMode: { ideal: 'environment' },
-                    width: { ideal: 2560 },        // Resolución alta para texto pequeño de pantallas
-                    height: { ideal: 1440 },       // Mantiene proporción 16:9 con más píxeles
-                    frameRate: { ideal: 15 },      // Frame rate bajo para estabilidad y menor tamaño
-                    aspectRatio: { ideal: 16/9 }   // Proporción estándar para pantallas
-                  }}
+                  videoConstraints={getVideoConstraints()}
                   onUserMedia={onUserMedia}
                   onUserMediaError={onUserMediaError}
                 />

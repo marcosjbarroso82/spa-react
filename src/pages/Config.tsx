@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useCredentials } from '../hooks/useCredentials';
 import { useVariables } from '../hooks/useVariables';
 import { usePreferences } from '../hooks/usePreferences';
+import { useCameraConfig } from '../hooks/useCameraConfig';
 
 const Config: React.FC = () => {
   const { 
@@ -30,6 +31,18 @@ const Config: React.FC = () => {
     updatePreference,
     resetPreferences
   } = usePreferences();
+  
+  const {
+    config: cameraConfig,
+    isLoading: cameraConfigLoading,
+    updateResolution,
+    updateQuality,
+    updateFocus,
+    updateProcessing,
+    applyPreset,
+    resetToDefault: resetCameraConfig,
+    presets
+  } = useCameraConfig();
   
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -117,7 +130,7 @@ const Config: React.FC = () => {
     setMessage({ type: 'success', text: 'Configuración restablecida a valores por defecto' });
   };
 
-  if (isLoading || variablesLoading || preferencesLoading) {
+  if (isLoading || variablesLoading || preferencesLoading || cameraConfigLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-white text-lg">Cargando...</div>
@@ -143,9 +156,252 @@ const Config: React.FC = () => {
             </div>
           )}
 
+          {/* Sección de Configuración de Cámara */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">📷 Configuración de Cámara</h2>
+            <div className="bg-gray-700 rounded-lg p-4 space-y-6">
+              {/* Presets */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Preset de Configuración
+                </label>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {presets.map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => {
+                        applyPreset(preset);
+                        setMessage({ type: 'success', text: `Preset '${preset}' aplicado` });
+                      }}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors duration-200"
+                    >
+                      {preset === 'screen' ? '📱 Pantalla' : 
+                       preset === 'document' ? '📄 Documento' : 
+                       preset === 'mobile' ? '📱 Móvil' : preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Resolución */}
+              <div>
+                <h3 className="text-lg font-medium text-white mb-3">Resolución</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Ancho (px)
+                    </label>
+                    <input
+                      type="number"
+                      value={cameraConfig.resolution.width}
+                      onChange={(e) => updateResolution({ width: parseInt(e.target.value) || 1920 })}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
+                      min="640"
+                      max="4096"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Alto (px)
+                    </label>
+                    <input
+                      type="number"
+                      value={cameraConfig.resolution.height}
+                      onChange={(e) => updateResolution({ height: parseInt(e.target.value) || 1080 })}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
+                      min="480"
+                      max="2160"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Frame Rate (fps)
+                    </label>
+                    <input
+                      type="number"
+                      value={cameraConfig.resolution.frameRate}
+                      onChange={(e) => updateResolution({ frameRate: parseInt(e.target.value) || 15 })}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
+                      min="1"
+                      max="60"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Aspect Ratio
+                    </label>
+                    <select
+                      value={cameraConfig.resolution.aspectRatio}
+                      onChange={(e) => updateResolution({ aspectRatio: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={16/9}>16:9 (Widescreen)</option>
+                      <option value={4/3}>4:3 (Estándar)</option>
+                      <option value={1}>1:1 (Cuadrado)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Calidad */}
+              <div>
+                <h3 className="text-lg font-medium text-white mb-3">Calidad</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Calidad de Captura (0.1 - 1.0)
+                    </label>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1.0"
+                      step="0.05"
+                      value={cameraConfig.quality.screenshotQuality}
+                      onChange={(e) => updateQuality({ screenshotQuality: parseFloat(e.target.value) })}
+                      className="w-full"
+                    />
+                    <div className="text-xs text-gray-400 mt-1">
+                      {cameraConfig.quality.screenshotQuality.toFixed(2)}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Calidad de Optimización (0.1 - 1.0)
+                    </label>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1.0"
+                      step="0.05"
+                      value={cameraConfig.quality.optimizationQuality}
+                      onChange={(e) => updateQuality({ optimizationQuality: parseFloat(e.target.value) })}
+                      className="w-full"
+                    />
+                    <div className="text-xs text-gray-400 mt-1">
+                      {cameraConfig.quality.optimizationQuality.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Enfoque */}
+              <div>
+                <h3 className="text-lg font-medium text-white mb-3">Enfoque</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Distancia de Enfoque (metros)
+                    </label>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1.0"
+                      step="0.1"
+                      value={cameraConfig.focus.distance}
+                      onChange={(e) => updateFocus({ distance: parseFloat(e.target.value) })}
+                      className="w-full"
+                    />
+                    <div className="text-xs text-gray-400 mt-1">
+                      {cameraConfig.focus.distance}m ({(cameraConfig.focus.distance * 100).toFixed(0)}cm)
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Tiempo de Estabilización (ms)
+                    </label>
+                    <input
+                      type="number"
+                      value={cameraConfig.focus.stabilizationTime}
+                      onChange={(e) => updateFocus({ stabilizationTime: parseInt(e.target.value) || 1000 })}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
+                      min="500"
+                      max="3000"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Procesamiento */}
+              <div>
+                <h3 className="text-lg font-medium text-white mb-3">Procesamiento de Imagen</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Contraste
+                    </label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="3.0"
+                      step="0.1"
+                      value={cameraConfig.processing.filters.contrast}
+                      onChange={(e) => updateProcessing({ 
+                        filters: { ...cameraConfig.processing.filters, contrast: parseFloat(e.target.value) }
+                      })}
+                      className="w-full"
+                    />
+                    <div className="text-xs text-gray-400 mt-1">
+                      {cameraConfig.processing.filters.contrast.toFixed(1)}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Brillo
+                    </label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.1"
+                      value={cameraConfig.processing.filters.brightness}
+                      onChange={(e) => updateProcessing({ 
+                        filters: { ...cameraConfig.processing.filters, brightness: parseFloat(e.target.value) }
+                      })}
+                      className="w-full"
+                    />
+                    <div className="text-xs text-gray-400 mt-1">
+                      {cameraConfig.processing.filters.brightness.toFixed(1)}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Saturación
+                    </label>
+                    <input
+                      type="range"
+                      min="0.0"
+                      max="2.0"
+                      step="0.1"
+                      value={cameraConfig.processing.filters.saturation}
+                      onChange={(e) => updateProcessing({ 
+                        filters: { ...cameraConfig.processing.filters, saturation: parseFloat(e.target.value) }
+                      })}
+                      className="w-full"
+                    />
+                    <div className="text-xs text-gray-400 mt-1">
+                      {cameraConfig.processing.filters.saturation.toFixed(1)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    resetCameraConfig();
+                    setMessage({ type: 'success', text: 'Configuración de cámara restablecida' });
+                  }}
+                  className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-sm"
+                >
+                  🔄 Restablecer Configuración de Cámara
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Sección de Configuración */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">⚙️ Configuración</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">⚙️ Configuración General</h2>
             <div className="bg-gray-700 rounded-lg p-4 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Modo de entrada de imagen */}
@@ -383,7 +639,17 @@ const Config: React.FC = () => {
           {/* Información adicional */}
           <div className="mt-6 p-4 bg-gray-700 rounded-lg">
             <h3 className="text-sm font-medium text-gray-300 mb-2">ℹ️ Información</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <h4 className="text-xs font-medium text-gray-300 mb-1">Cámara</h4>
+                <ul className="text-xs text-gray-400 space-y-1">
+                  <li>• Resolución y calidad de captura</li>
+                  <li>• Configuraciones de enfoque</li>
+                  <li>• Filtros de procesamiento</li>
+                  <li>• Presets para diferentes escenarios</li>
+                  <li>• Se guarda en localStorage</li>
+                </ul>
+              </div>
               <div>
                 <h4 className="text-xs font-medium text-gray-300 mb-1">Configuración</h4>
                 <ul className="text-xs text-gray-400 space-y-1">
