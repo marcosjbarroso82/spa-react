@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import { useCredentials } from '../../hooks/useCredentials';
+import { useVariables } from '../../hooks/useVariables';
 import { useCameraConfig } from '../../hooks/useCameraConfig';
 import { useImageProcessing } from '../../hooks/useImageProcessing';
 import { ImageInfo } from '../../utils/imageUtils';
@@ -15,12 +16,9 @@ import ApiRequestDisplay, { ApiRequest } from '../../components/ApiRequestDispla
 
 type FlowiseResponse = any;
 
-const ANALIZA_ENUNCIADO_URL = 'http://localhost:3008/api/v1/prediction/5aadeb2b-e801-42c7-a7bd-deb17380d677';
-const RAG_CON_RESPUESTAS_URL = 'http://localhost:3008/api/v1/prediction/b80a89cb-e134-4150-9a8d-22f6ffc827bf';
-const HERRAMIENTAS_CON_RESPUESTAS_URL = 'http://localhost:3008/api/v1/prediction/ab6d285b-4d38-467b-9a70-a6af8ebb17f8';
-
 const AnswerFromImage: React.FC = () => {
   const { getCredentialByKey, isLoading: credentialsLoading } = useCredentials();
+  const { getVariableByKey, isLoading: variablesLoading } = useVariables();
   const { getContinuousFocusConstraints } = useCameraConfig();
   const { processImage, isProcessing: isImageProcessing } = useImageProcessing();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -50,6 +48,11 @@ const AnswerFromImage: React.FC = () => {
 
   const appId = getCredentialByKey('mathpix_app_id');
   const apiKey = getCredentialByKey('mathpix_api_key');
+  
+  // Obtener URLs de las variables
+  const analizaEnunciadoUrl = getVariableByKey('ANALIZA_ENUNCIADO_URL');
+  const ragConRespuestasUrl = getVariableByKey('RAG_CON_RESPUESTAS_URL');
+  const herramientasConRespuestasUrl = getVariableByKey('HERRAMIENTAS_CON_RESPUESTAS_URL');
 
   // Función para abrir modal de imagen
   const openImageModal = (src: string, alt: string, title: string) => {
@@ -333,7 +336,7 @@ const AnswerFromImage: React.FC = () => {
   };
 
   const process = async () => {
-    if (selectedFiles.length === 0 || !appId || !apiKey) return;
+    if (selectedFiles.length === 0 || !appId || !apiKey || !analizaEnunciadoUrl || !ragConRespuestasUrl || !herramientasConRespuestasUrl) return;
     setIsProcessing(true);
     setError(null);
     setLecturas([]);
@@ -458,14 +461,14 @@ const AnswerFromImage: React.FC = () => {
       const analizaRequest: ApiRequest = {
         id: 'analiza-enunciado',
         name: 'Analiza Enunciado',
-        url: ANALIZA_ENUNCIADO_URL,
+        url: analizaEnunciadoUrl,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: { question: compiledText },
         timestamp: new Date()
       };
 
-      const analizaRes = await fetch(ANALIZA_ENUNCIADO_URL, {
+      const analizaRes = await fetch(analizaEnunciadoUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: compiledText }),
@@ -514,7 +517,7 @@ const AnswerFromImage: React.FC = () => {
       const ragRequest: ApiRequest = {
         id: 'rag-respuestas',
         name: 'RAG con Respuestas',
-        url: RAG_CON_RESPUESTAS_URL,
+        url: ragConRespuestasUrl,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: { question: outputToSend },
@@ -524,7 +527,7 @@ const AnswerFromImage: React.FC = () => {
       const toolsRequest: ApiRequest = {
         id: 'herramientas-respuestas',
         name: 'Herramientas con Respuestas',
-        url: HERRAMIENTAS_CON_RESPUESTAS_URL,
+        url: herramientasConRespuestasUrl,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: { question: outputToSend },
@@ -532,8 +535,8 @@ const AnswerFromImage: React.FC = () => {
       };
 
       const [ragRes, toolsRes] = await Promise.all([
-        fetch(RAG_CON_RESPUESTAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }),
-        fetch(HERRAMIENTAS_CON_RESPUESTAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }),
+        fetch(ragConRespuestasUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }),
+        fetch(herramientasConRespuestasUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }),
       ]);
 
       const [ragCt, toolsCt] = [ragRes.headers.get('content-type') || '', toolsRes.headers.get('content-type') || ''];
@@ -600,15 +603,33 @@ const AnswerFromImage: React.FC = () => {
     }
   };
 
-  if (credentialsLoading) {
-    return <div className="text-center py-8 text-white">Cargando credenciales…</div>;
+  if (credentialsLoading || variablesLoading) {
+    return <div className="text-center py-8 text-white">Cargando configuración…</div>;
   }
+  
   if (!appId || !apiKey) {
     return (
       <div className="text-center py-8">
         <div className="text-6xl mb-4">🖼️</div>
         <h2 className="text-2xl font-semibold mb-4 text-yellow-400">Credenciales de Mathpix Requeridas</h2>
         <p className="text-gray-300 mb-4">Configura <strong>mathpix_app_id</strong> y <strong>mathpix_api_key</strong> en Configuración.</p>
+      </div>
+    );
+  }
+  
+  if (!analizaEnunciadoUrl || !ragConRespuestasUrl || !herramientasConRespuestasUrl) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-6xl mb-4">🔧</div>
+        <h2 className="text-2xl font-semibold mb-4 text-yellow-400">Variables de Configuración Requeridas</h2>
+        <p className="text-gray-300 mb-4">Configura las siguientes variables en Configuración:</p>
+        <div className="bg-gray-700 rounded-lg p-4 max-w-md mx-auto">
+          <ul className="text-left text-gray-300 space-y-2">
+            <li>• <strong>ANALIZA_ENUNCIADO_URL</strong></li>
+            <li>• <strong>RAG_CON_RESPUESTAS_URL</strong></li>
+            <li>• <strong>HERRAMIENTAS_CON_RESPUESTAS_URL</strong></li>
+          </ul>
+        </div>
       </div>
     );
   }
