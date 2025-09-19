@@ -1,7 +1,12 @@
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
-import { useCredentials } from '../../hooks/useCredentials';
 import Webcam from 'react-webcam';
+import { useCredentials } from '../../hooks/useCredentials';
 import { useCameraConfig } from '../../hooks/useCameraConfig';
+import { ImageInfo } from '../../utils/imageUtils';
+import ImageDisplay from '../../components/ImageDisplay';
+import FileUpload from '../../components/FileUpload';
+import CameraPreview from '../../components/CameraPreview';
+import ProcessingControls from '../../components/ProcessingControls';
 
 type FlowiseResponse = any;
 
@@ -14,6 +19,7 @@ const AnswerFromImage: React.FC = () => {
   const { getVideoConstraints, getContinuousFocusConstraints } = useCameraConfig();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [imageInfo, setImageInfo] = useState<ImageInfo[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrText, setOcrText] = useState<string | null>(null);
   const [lecturas, setLecturas] = useState<string[]>([]);
@@ -24,7 +30,7 @@ const AnswerFromImage: React.FC = () => {
   });
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isFocusing, setIsFocusing] = useState(false);
   const webcamRef = useRef<Webcam>(null);
   const speechQueueRef = useRef<string[]>([]);
   const isSpeakingRef = useRef<boolean>(false);
@@ -35,6 +41,12 @@ const AnswerFromImage: React.FC = () => {
   const apiKey = getCredentialByKey('mathpix_api_key');
 
   const canProcess = useMemo(() => selectedFiles.length > 0 && !!appId && !!apiKey && !credentialsLoading, [selectedFiles, appId, apiKey, credentialsLoading]);
+
+  // Función para obtener información de la imagen (usando utilidad)
+  const getImageInfo = useCallback(async (imageUrl: string): Promise<ImageInfo> => {
+    const { getImageInfo: getImageInfoUtil } = await import('../../utils/imageUtils');
+    return getImageInfoUtil(imageUrl);
+  }, []);
 
   // Función para procesar la cola de speech
   const processSpeechQueue = () => {
@@ -146,23 +158,32 @@ const AnswerFromImage: React.FC = () => {
     }
   }, []);
 
-  const addPhotoFromDataUrl = (dataUrl: string) => {
-    // Convertir dataUrl a File
-    fetch(dataUrl)
-      .then(res => res.blob())
-      .then(blob => {
-        const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
-        setSelectedFiles(prev => [...prev, file]);
-        setPreviewUrls(prev => [...prev, dataUrl]);
-        setOcrText(null);
-        setLecturas([]);
-        setError(null);
-      })
-      .catch(err => {
-        console.error('Error al convertir foto a archivo:', err);
-        setError('Error al procesar la foto capturada');
-      });
-  };
+  const addPhotoFromDataUrl = useCallback(async (dataUrl: string) => {
+    try {
+      // Obtener información de la imagen
+      const info = await getImageInfo(dataUrl);
+      setImageInfo(prev => [...prev, info]);
+      
+      // Convertir dataUrl a File
+      fetch(dataUrl)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          setSelectedFiles(prev => [...prev, file]);
+          setPreviewUrls(prev => [...prev, dataUrl]);
+          setOcrText(null);
+          setLecturas([]);
+          setError(null);
+        })
+        .catch(err => {
+          console.error('Error al convertir foto a archivo:', err);
+          setError('Error al procesar la foto capturada');
+        });
+    } catch (err) {
+      console.error('Error al obtener información de la imagen:', err);
+      setError('Error al procesar la imagen capturada');
+    }
+  }, [getImageInfo]);
 
   const onUserMedia = async (stream: MediaStream) => {
     console.log('Cámara conectada exitosamente');
@@ -190,43 +211,49 @@ const AnswerFromImage: React.FC = () => {
     setError('No se pudo acceder a la cámara. Verifica los permisos.');
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFileSelect = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
     
-    // Validar archivo
-    if (!file.type.startsWith('image/')) {
-      setError('Por favor selecciona un archivo de imagen válido');
-      return;
+    // Procesar cada archivo
+    for (const file of files) {
+      // Validar archivo
+      if (!file.type.startsWith('image/')) {
+        setError('Por favor selecciona un archivo de imagen válido');
+        continue;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setError('El archivo es demasiado grande. El tamaño máximo es 5MB');
+        continue;
+      }
+      
+      // Agregar a la lista existente
+      setSelectedFiles(prev => [...prev, file]);
+      setError(null);
+      setOcrText(null);
+      setLecturas([]);
+      
+      // Crear preview y agregar a la lista
+      const url = URL.createObjectURL(file);
+      setPreviewUrls(prev => [...prev, url]);
+      
+      // Obtener información de la imagen
+      try {
+        const info = await getImageInfo(url);
+        setImageInfo(prev => [...prev, info]);
+      } catch (err) {
+        console.error('Error al obtener información de la imagen:', err);
+      }
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setError('El archivo es demasiado grande. El tamaño máximo es 5MB');
-      return;
-    }
-    
-    // Agregar a la lista existente
-    setSelectedFiles(prev => [...prev, file]);
-    setError(null);
-    setOcrText(null);
-    setLecturas([]);
-    
-    // Crear preview y agregar a la lista
-    const url = URL.createObjectURL(file);
-    setPreviewUrls(prev => [...prev, url]);
-    
-    // Limpiar el input para permitir seleccionar el mismo archivo otra vez
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+  }, [getImageInfo]);
 
   const handleRemoveImage = (index: number) => {
     // Revocar URL de la imagen removida
     URL.revokeObjectURL(previewUrls[index]);
     
-    // Remover de ambas listas
+    // Remover de todas las listas
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
     setPreviewUrls(prev => prev.filter((_, i) => i !== index));
+    setImageInfo(prev => prev.filter((_, i) => i !== index));
     setOcrText(null);
     setLecturas([]);
     setError(null);
@@ -237,10 +264,10 @@ const AnswerFromImage: React.FC = () => {
     previewUrls.forEach(url => URL.revokeObjectURL(url));
     setSelectedFiles([]);
     setPreviewUrls([]);
+    setImageInfo([]);
     setOcrText(null);
     setLecturas([]);
     setError(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const process = async () => {
@@ -415,32 +442,31 @@ const AnswerFromImage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Subir archivo */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">📁 Subir imagen</label>
-            <input
-              ref={fileInputRef}
-              type="file"
+            <FileUpload
+              onFileSelect={handleFileSelect}
               accept="image/*"
-              onChange={handleFileSelect}
-              className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+              multiple={true}
+              maxSize={5}
+              buttonText="Seleccionar Imágenes"
+              icon="📁"
+              showInfo={true}
             />
-            <p className="text-xs text-gray-400 mt-1">Máximo 5MB por archivo</p>
           </div>
 
           {/* Tomar foto */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">📷 Tomar foto</label>
             <div className="flex gap-2">
               {!isCameraOn ? (
                 <button
                   onClick={startCamera}
-                  className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded text-sm transition-colors duration-200"
+                  className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded text-sm transition-colors duration-200"
                 >
                   📹 Activar Cámara
                 </button>
               ) : (
                 <button
                   onClick={stopCamera}
-                  className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded text-sm transition-colors duration-200"
+                  className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded text-sm transition-colors duration-200"
                 >
                   📹 Desactivar
                 </button>
@@ -454,30 +480,17 @@ const AnswerFromImage: React.FC = () => {
         {isCameraOn && (
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-gray-300">Cámara activa:</h4>
-            <div className="relative bg-black rounded-lg overflow-hidden">
-              <Webcam
-                ref={webcamRef}
-                audio={false}
-                screenshotFormat="image/jpeg"
-                screenshotQuality={0.85}  // Calidad alta para preservar detalles de texto pequeño
-                videoConstraints={getVideoConstraints()}
-                onUserMedia={onUserMedia}
-                onUserMediaError={onUserMediaError}
-                className="w-full h-auto max-h-64 object-cover"
-              />
-              <div className="absolute top-4 right-4">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-              </div>
-            </div>
-            <div className="flex justify-center">
-              <button
-                onClick={capturePhoto}
-                disabled={isCapturing}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors duration-200 flex items-center gap-2"
-              >
-                {isCapturing ? '📸 Capturando...' : '📸 Tomar Foto'}
-              </button>
-            </div>
+            <CameraPreview
+              isActive={isCameraOn}
+              onCapture={capturePhoto}
+              isCapturing={isCapturing}
+              isFocusing={isFocusing}
+              error={error || undefined}
+              showControls={true}
+              webcamRef={webcamRef as React.RefObject<Webcam>}
+              onUserMedia={onUserMedia}
+              onUserMediaError={onUserMediaError}
+            />
           </div>
         )}
 
@@ -498,35 +511,35 @@ const AnswerFromImage: React.FC = () => {
             <h4 className="text-sm font-medium text-gray-300">Imágenes seleccionadas ({previewUrls.length}):</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {previewUrls.map((url, index) => (
-                <div key={index} className="relative space-y-2">
-                  <div className="flex justify-between items-center">
-                    <div className="text-xs text-gray-400">Imagen {index + 1}</div>
+                <ImageDisplay
+                  key={index}
+                  imageSrc={url}
+                  imageInfo={imageInfo[index]}
+                  title={`Imagen ${index + 1}`}
+                  showInfo={true}
+                  maxHeight="max-h-48"
+                  actions={
                     <button
                       onClick={() => handleRemoveImage(index)}
                       className="text-red-400 hover:text-red-300 text-sm"
                       title="Remover imagen"
                     >
-                      ✕
+                      ✕ Remover
                     </button>
-                  </div>
-                  <img 
-                    src={url} 
-                    alt={`Preview ${index + 1}`} 
-                    className="w-full max-h-48 object-contain rounded-lg border border-gray-500" 
-                  />
-                </div>
+                  }
+                />
               ))}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={process}
-                disabled={!canProcess || isProcessing}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
-              >
-                {isProcessing ? '🔄 Procesando…' : `🚀 Procesar ${selectedFiles.length} imagen${selectedFiles.length > 1 ? 'es' : ''}`}
-              </button>
-              <button onClick={handleClear} className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200">🗑️ Limpiar todo</button>
-            </div>
+            <ProcessingControls
+              onProcess={process}
+              onClear={handleClear}
+              isProcessing={isProcessing}
+              hasImage={previewUrls.length > 0}
+              processText={`Procesar ${selectedFiles.length} imagen${selectedFiles.length > 1 ? 'es' : ''}`}
+              clearText="Limpiar todo"
+              showCamera={false}
+              className="justify-start"
+            />
           </div>
         )}
       </div>
