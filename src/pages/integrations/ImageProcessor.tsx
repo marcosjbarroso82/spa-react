@@ -151,27 +151,17 @@ const ImageProcessor: React.FC = () => {
       const info = await getImageInfo(dataUrl);
       setOriginalInfo(info);
       
-      // Procesar imagen
-      setIsProcessing(true);
-      try {
-        const processed = await optimizeImage(dataUrl);
-        setProcessedImage(processed);
-        
-        const processedInfo = await getImageInfo(processed);
-        setProcessedInfo(processedInfo);
-        
-        setMessage({ type: 'success', text: 'Imagen procesada correctamente' });
-      } catch (error) {
-        setMessage({ type: 'error', text: 'Error al procesar la imagen' });
-      } finally {
-        setIsProcessing(false);
-      }
+      // Limpiar imagen procesada anterior
+      setProcessedImage(null);
+      setProcessedInfo(null);
+      
+      setMessage({ type: 'success', text: 'Imagen cargada correctamente. Haz clic en "Aplicar" para procesarla.' });
     };
     reader.readAsDataURL(file);
-  }, [optimizeImage, getImageInfo]);
+  }, [getImageInfo]);
 
-  // Función para reprocesar con nuevos parámetros
-  const reprocessImage = useCallback(async () => {
+  // Función para aplicar procesamiento con la configuración actual
+  const applyProcessing = useCallback(async () => {
     if (!originalImage) return;
     
     setIsProcessing(true);
@@ -182,9 +172,9 @@ const ImageProcessor: React.FC = () => {
       const processedInfo = await getImageInfo(processed);
       setProcessedInfo(processedInfo);
       
-      setMessage({ type: 'success', text: 'Imagen reprocesada con nuevos parámetros' });
+      setMessage({ type: 'success', text: 'Imagen procesada con la configuración actual' });
     } catch (error) {
-      setMessage({ type: 'error', text: 'Error al reprocesar la imagen' });
+      setMessage({ type: 'error', text: 'Error al procesar la imagen' });
     } finally {
       setIsProcessing(false);
     }
@@ -208,6 +198,7 @@ const ImageProcessor: React.FC = () => {
     setProcessedInfo(null);
     setMessage(null);
     setModalImage(null);
+    setIsProcessing(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -251,11 +242,11 @@ const ImageProcessor: React.FC = () => {
                 </button>
                 {originalImage && (
                   <button
-                    onClick={reprocessImage}
+                    onClick={applyProcessing}
                     disabled={isProcessing}
                     className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
                   >
-                    {isProcessing ? '⏳ Procesando...' : '🔄 Reprocesar'}
+                    {isProcessing ? '⏳ Procesando...' : '✅ Aplicar'}
                   </button>
                 )}
                 <button
@@ -311,8 +302,11 @@ const ImageProcessor: React.FC = () => {
                         title="Haz clic para ampliar"
                       />
                     ) : (
-                      <div className="w-full h-64 bg-gray-600 rounded-lg flex items-center justify-center">
-                        <div className="text-gray-400 text-lg">No procesada</div>
+                      <div className="w-full h-64 bg-gray-600 rounded-lg flex flex-col items-center justify-center">
+                        <div className="text-gray-400 text-lg mb-2">No procesada</div>
+                        <div className="text-gray-500 text-sm text-center">
+                          Haz clic en "Aplicar" para procesar<br/>la imagen con la configuración actual
+                        </div>
                       </div>
                     )}
                   </div>
@@ -608,7 +602,8 @@ const ImageProcessor: React.FC = () => {
             <div className="text-xs text-gray-400 space-y-1">
               <p>• Esta herramienta te permite probar diferentes parámetros de procesamiento de imágenes para optimizar el OCR</p>
               <p>• Los parámetros se guardan automáticamente en localStorage y se sincronizan con la página de configuración</p>
-              <p>• Puedes comparar la imagen original con la procesada para evaluar la efectividad de los ajustes</p>
+              <p>• <strong>Nuevo flujo:</strong> Sube una imagen, ajusta los parámetros, y haz clic en "Aplicar" para procesarla</p>
+              <p>• Puedes modificar los parámetros y volver a aplicar para ver los cambios en tiempo real</p>
               <p>• Los metadatos muestran el tamaño de archivo y las dimensiones de ambas imágenes</p>
             </div>
           </div>
