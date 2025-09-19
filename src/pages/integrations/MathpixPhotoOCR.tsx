@@ -52,6 +52,12 @@ const MathpixPhotoOCR: React.FC = () => {
     dimensions: string;
     format: string;
   } | null>(null);
+  const [optimizedImageInfo, setOptimizedImageInfo] = useState<{
+    size: string;
+    dimensions: string;
+    format: string;
+  } | null>(null);
+  const [optimizedPhoto, setOptimizedPhoto] = useState<string | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
 
   // Obtener credenciales de Mathpix
@@ -63,6 +69,77 @@ const MathpixPhotoOCR: React.FC = () => {
     const timestamp = new Date().toLocaleTimeString();
     setDebugLogs(prev => [...prev.slice(-9), `[${timestamp}] ${message}`]);
     console.log(`[MathpixPhotoOCR] ${message}`);
+  };
+
+
+  /**
+   * Función para optimizar imagen específicamente para OCR
+   * 
+   * Aplica múltiples optimizaciones:
+   * - Redimensionamiento inteligente
+   * - Conversión a escala de grises (reduce tamaño)
+   * - Mejora de contraste para texto
+   * - Compresión optimizada para OCR
+   */
+  const optimizeImageForOCR = (dataUrl: string, maxWidth: number = 1920, maxHeight: number = 1080, quality: number = 0.6): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+
+        let { width, height } = img;
+
+        // Calcular nuevas dimensiones manteniendo aspect ratio
+        if (width > height) {
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // Configuraciones para mejorar OCR
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Aplicar filtros para mejorar el contraste del texto
+        ctx.filter = 'contrast(1.2) brightness(1.1)';
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convertir a escala de grises para reducir tamaño
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+          data[i] = gray;     // R
+          data[i + 1] = gray; // G
+          data[i + 2] = gray; // B
+          // data[i + 3] mantiene el alpha
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        
+        // Exportar como JPEG con calidad optimizada
+        const optimizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(optimizedDataUrl);
+      };
+      img.src = dataUrl;
+    });
   };
 
   /**
@@ -350,12 +427,23 @@ const MathpixPhotoOCR: React.FC = () => {
           const blob: Blob = await imageCaptureRef.current.takePhoto();
           const dataUrl = await blobToDataUrl(blob);
           
-          // Obtener información de la imagen
-          const info = await getImageInfo(dataUrl);
-          setImageInfo(info);
-          addDebugLog(`Imagen capturada: ${info.dimensions}, ${info.size}`);
+          // Obtener información de la imagen original
+          const originalInfo = await getImageInfo(dataUrl);
+          setImageInfo(originalInfo);
+          addDebugLog(`Imagen original: ${originalInfo.dimensions}, ${originalInfo.size}`);
           
+          // Optimizar imagen para OCR
+          addDebugLog('Optimizando imagen para OCR...');
+          const optimizedImage = await optimizeImageForOCR(dataUrl);
+          
+          // Obtener información de la imagen optimizada
+          const optimizedInfo = await getImageInfo(optimizedImage);
+          setOptimizedImageInfo(optimizedInfo);
+          addDebugLog(`Imagen optimizada: ${optimizedInfo.dimensions}, ${optimizedInfo.size}`);
+          
+          // Mostrar ambas imágenes
           setPhoto(dataUrl);
+          setOptimizedPhoto(optimizedImage);
           setError(null);
           return;
         } catch (icErr) {
@@ -367,12 +455,23 @@ const MathpixPhotoOCR: React.FC = () => {
       const imageSrc = webcamRef.current.getScreenshot();
       
       if (imageSrc) {
-        // Obtener información de la imagen
-        const info = await getImageInfo(imageSrc);
-        setImageInfo(info);
-        addDebugLog(`Imagen capturada (fallback): ${info.dimensions}, ${info.size}`);
+        // Obtener información de la imagen original
+        const originalInfo = await getImageInfo(imageSrc);
+        setImageInfo(originalInfo);
+        addDebugLog(`Imagen original: ${originalInfo.dimensions}, ${originalInfo.size}`);
         
+        // Optimizar imagen para OCR
+        addDebugLog('Optimizando imagen para OCR...');
+        const optimizedImage = await optimizeImageForOCR(imageSrc);
+        
+        // Obtener información de la imagen optimizada
+        const optimizedInfo = await getImageInfo(optimizedImage);
+        setOptimizedImageInfo(optimizedInfo);
+        addDebugLog(`Imagen optimizada: ${optimizedInfo.dimensions}, ${optimizedInfo.size}`);
+        
+        // Mostrar ambas imágenes
         setPhoto(imageSrc);
+        setOptimizedPhoto(optimizedImage);
         setError(null);
       } else {
         throw new Error('No se pudo capturar la imagen');
@@ -429,7 +528,10 @@ const MathpixPhotoOCR: React.FC = () => {
 
   // Función para procesar la foto con Mathpix
   const processPhoto = async () => {
-    if (!photo) {
+    // Usar la imagen optimizada si está disponible, sino la original
+    const imageToProcess = optimizedPhoto || photo;
+    
+    if (!imageToProcess) {
       setError('No hay foto para procesar');
       return;
     }
@@ -447,12 +549,12 @@ const MathpixPhotoOCR: React.FC = () => {
 
     try {
       // Validar formato de data URL
-      if (!photo.startsWith('data:image/')) {
+      if (!imageToProcess.startsWith('data:image/')) {
         throw new Error('Formato de imagen inválido');
       }
 
       // Convertir data URL a base64
-      const base64Data = photo.split(',')[1];
+      const base64Data = imageToProcess.split(',')[1];
       if (!base64Data) {
         throw new Error('No se pudo extraer los datos de la imagen');
       }
@@ -461,14 +563,14 @@ const MathpixPhotoOCR: React.FC = () => {
       const imageSizeInBytes = (base64Data.length * 3) / 4;
       const imageSizeInMB = imageSizeInBytes / (1024 * 1024);
       
-      addDebugLog(`Tamaño de imagen original: ${imageSizeInMB.toFixed(2)}MB`);
+      addDebugLog(`Tamaño de imagen a procesar: ${imageSizeInMB.toFixed(2)}MB`);
 
-      let processedPhoto = photo;
+      let processedPhoto = imageToProcess;
 
       // PASO 1: Mejorar imagen para OCR matemático (especialmente fotos de celular)
       // Esto es crucial para obtener mejores resultados de Mathpix
       addDebugLog('Aplicando mejoras de imagen para OCR matemático...');
-      processedPhoto = await enhanceImageForOCR(photo);
+      processedPhoto = await enhanceImageForOCR(imageToProcess);
 
       // Verificar tamaño después de las mejoras
       const enhancedBase64Data = processedPhoto.split(',')[1];
@@ -725,12 +827,13 @@ const MathpixPhotoOCR: React.FC = () => {
                 ref={webcamRef}
                 audio={false}
                 screenshotFormat="image/jpeg"
-                screenshotQuality={1}
+                screenshotQuality={0.7}
                 videoConstraints={{
                   facingMode: { ideal: 'environment' },
-                  width: { ideal: 3840 },
-                  height: { ideal: 2160 },
-                  frameRate: { ideal: 30 }
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 },
+                  frameRate: { ideal: 15 },
+                  aspectRatio: { ideal: 16/9 }
                 }}
                 onUserMedia={onUserMedia}
                 onUserMediaError={onUserMediaError}
@@ -800,37 +903,93 @@ const MathpixPhotoOCR: React.FC = () => {
         {/* Foto capturada */}
         {photo && (
           <div className="bg-gray-700 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-white mb-4">📸 Foto Capturada</h3>
+            <h3 className="text-lg font-medium text-white mb-4">📸 Imágenes Capturadas</h3>
             
-            <div className="space-y-4">
-              <div className="relative bg-black rounded-lg overflow-hidden">
-                <img
-                  src={photo}
-                  alt="Foto capturada"
-                  className="w-full h-auto max-h-96 object-contain mx-auto"
-                />
+            <div className="space-y-6">
+              {/* Imagen original */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h4 className="text-md font-medium text-white mb-3">Imagen Original</h4>
+                <div className="relative bg-black rounded-lg overflow-hidden">
+                  <img
+                    src={photo}
+                    alt="Imagen original"
+                    className="w-full h-auto max-h-96 object-contain mx-auto"
+                  />
+                </div>
               </div>
 
-              {/* Información de la imagen */}
-              {imageInfo && (
-                <div className="bg-gray-800 rounded-lg p-3">
-                  <h4 className="text-sm font-medium text-gray-300 mb-2">Información de la imagen:</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-400">Tamaño:</span>
-                      <div className="text-white font-medium">{imageInfo.size}</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-400">Dimensiones:</span>
-                      <div className="text-white font-medium">{imageInfo.dimensions}</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-400">Formato:</span>
-                      <div className="text-white font-medium">{imageInfo.format}</div>
-                    </div>
+              {/* Imagen optimizada */}
+              {optimizedPhoto && (
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h4 className="text-md font-medium text-white mb-3">Imagen Optimizada para OCR</h4>
+                  <div className="relative bg-black rounded-lg overflow-hidden">
+                    <img
+                      src={optimizedPhoto}
+                      alt="Imagen optimizada"
+                      className="w-full h-auto max-h-96 object-contain mx-auto"
+                    />
                   </div>
                 </div>
               )}
+
+              {/* Comparación de metadatos */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h4 className="text-lg font-medium text-gray-300 mb-4">Comparación de Metadatos</h4>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Metadatos originales */}
+                  {imageInfo && (
+                    <div className="bg-gray-700 rounded-lg p-4">
+                      <h5 className="text-md font-medium text-white mb-3">Imagen Original</h5>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Tamaño:</span>
+                          <span className="text-white font-medium">{imageInfo.size}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Dimensiones:</span>
+                          <span className="text-white font-medium">{imageInfo.dimensions}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Formato:</span>
+                          <span className="text-white font-medium">{imageInfo.format}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Metadatos optimizados */}
+                  {optimizedImageInfo && (
+                    <div className="bg-gray-700 rounded-lg p-4">
+                      <h5 className="text-md font-medium text-white mb-3">Imagen Optimizada</h5>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Tamaño:</span>
+                          <span className="text-green-400 font-medium">{optimizedImageInfo.size}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Dimensiones:</span>
+                          <span className="text-white font-medium">{optimizedImageInfo.dimensions}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Formato:</span>
+                          <span className="text-white font-medium">{optimizedImageInfo.format}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Resumen de optimización */}
+                {imageInfo && optimizedImageInfo && (
+                  <div className="mt-4 p-3 bg-blue-900/30 rounded-lg">
+                    <div className="text-sm text-blue-300">
+                      <strong>Optimización:</strong> La imagen optimizada está diseñada específicamente para OCR, 
+                      con mejor contraste, escala de grises y compresión optimizada para reducir el tamaño 
+                      manteniendo la calidad necesaria para el reconocimiento de texto.
+                    </div>
+                  </div>
+                )}
+              </div>
               
               <div className="flex flex-wrap gap-3 justify-center">
                 <button
@@ -838,7 +997,7 @@ const MathpixPhotoOCR: React.FC = () => {
                   disabled={isProcessing}
                   className="px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors duration-200 flex items-center gap-2"
                 >
-                  {isProcessing ? '🔄 Procesando...' : '🚀 Procesar con Mathpix'}
+                  {isProcessing ? '🔄 Procesando...' : '🚀 Procesar con Mathpix (Imagen Optimizada)'}
                 </button>
                 <button
                   onClick={clearPhoto}

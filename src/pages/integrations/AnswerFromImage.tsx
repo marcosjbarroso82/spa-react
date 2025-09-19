@@ -463,12 +463,13 @@ const AnswerFromImage: React.FC = () => {
                 ref={webcamRef}
                 audio={false}
                 screenshotFormat="image/jpeg"
-                screenshotQuality={1}
+                screenshotQuality={0.7}
                 videoConstraints={{
                   facingMode: { ideal: 'environment' },
-                  width: { ideal: 3840 },
-                  height: { ideal: 2160 },
-                  frameRate: { ideal: 30 }
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 },
+                  frameRate: { ideal: 15 },
+                  aspectRatio: { ideal: 16/9 }
                 }}
                 onUserMedia={onUserMedia}
                 onUserMediaError={onUserMediaError}
