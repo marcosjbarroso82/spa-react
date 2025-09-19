@@ -185,12 +185,17 @@ const Config: React.FC = () => {
 
               {/* Resolución */}
               <div>
-                <h3 className="text-lg font-medium text-white mb-3">Resolución</h3>
+                <h3 className="text-lg font-medium text-white mb-2">📐 Resolución de Cámara</h3>
+                <p className="text-xs text-gray-400 mb-3">
+                  💡 <strong>¿Qué hace?</strong> Define la resolución de captura de la cámara. 
+                  <strong>¿Cuándo usar?</strong> Resoluciones altas para texto pequeño, bajas para ahorrar memoria.
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Ancho (px)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">Resolución horizontal de la cámara</p>
                     <input
                       type="number"
                       value={cameraConfig.resolution.width}
@@ -204,6 +209,7 @@ const Config: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Alto (px)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">Resolución vertical de la cámara</p>
                     <input
                       type="number"
                       value={cameraConfig.resolution.height}
@@ -217,6 +223,7 @@ const Config: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Frame Rate (fps)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">Fotogramas por segundo de la cámara</p>
                     <input
                       type="number"
                       value={cameraConfig.resolution.frameRate}
@@ -230,6 +237,7 @@ const Config: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Aspect Ratio
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">Proporción de la imagen capturada</p>
                     <select
                       value={cameraConfig.resolution.aspectRatio}
                       onChange={(e) => updateResolution({ aspectRatio: parseFloat(e.target.value) })}
@@ -245,12 +253,20 @@ const Config: React.FC = () => {
 
               {/* Calidad */}
               <div>
-                <h3 className="text-lg font-medium text-white mb-3">Calidad</h3>
+                <h3 className="text-lg font-medium text-white mb-2">🎯 Calidad</h3>
+                <p className="text-xs text-gray-400 mb-3">
+                  💡 <strong>¿Qué hace?</strong> Controla la calidad de captura y optimización de imágenes. 
+                  <strong>¿Cuándo usar?</strong> Calidad alta para texto pequeño, baja para ahorrar espacio.
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Calidad de Captura (0.1 - 1.0)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Calidad de la imagen al capturar con la cámara.<br/>
+                      <strong>¿Cuándo usar?</strong> Valores altos (0.8-1.0) para texto pequeño, bajos (0.5-0.7) para ahorrar memoria.
+                    </p>
                     <input
                       type="range"
                       min="0.1"
@@ -261,13 +277,17 @@ const Config: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.quality.screenshotQuality.toFixed(2)}
+                      {cameraConfig.quality.screenshotQuality.toFixed(2)} - {cameraConfig.quality.screenshotQuality < 0.5 ? 'Baja' : cameraConfig.quality.screenshotQuality < 0.8 ? 'Media' : 'Alta'}
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Calidad de Optimización (0.1 - 1.0)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Calidad de compresión JPEG al exportar imágenes procesadas.<br/>
+                      <strong>¿Cuándo usar?</strong> Valores altos (0.8-1.0) para mejor calidad, bajos (0.5-0.7) para archivos más pequeños.
+                    </p>
                     <input
                       type="range"
                       min="0.1"
@@ -278,7 +298,7 @@ const Config: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.quality.optimizationQuality.toFixed(2)}
+                      {cameraConfig.quality.optimizationQuality.toFixed(2)} - {cameraConfig.quality.optimizationQuality < 0.5 ? 'Baja' : cameraConfig.quality.optimizationQuality < 0.8 ? 'Media' : 'Alta'}
                     </div>
                   </div>
                 </div>
@@ -286,12 +306,20 @@ const Config: React.FC = () => {
 
               {/* Enfoque */}
               <div>
-                <h3 className="text-lg font-medium text-white mb-3">Enfoque</h3>
+                <h3 className="text-lg font-medium text-white mb-2">🎯 Enfoque de Cámara</h3>
+                <p className="text-xs text-gray-400 mb-3">
+                  💡 <strong>¿Qué hace?</strong> Configura el enfoque automático de la cámara para diferentes distancias. 
+                  <strong>¿Cuándo usar?</strong> Distancias cortas para documentos, largas para pantallas.
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Distancia de Enfoque (metros)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Distancia ideal para el enfoque automático.<br/>
+                      <strong>¿Cuándo usar?</strong> 0.2m para documentos, 0.4m para pantallas, 0.6m para objetos lejanos.
+                    </p>
                     <input
                       type="range"
                       min="0.1"
@@ -302,13 +330,17 @@ const Config: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.focus.distance}m ({(cameraConfig.focus.distance * 100).toFixed(0)}cm)
+                      {cameraConfig.focus.distance}m ({(cameraConfig.focus.distance * 100).toFixed(0)}cm) - {cameraConfig.focus.distance < 0.3 ? 'Cerca' : cameraConfig.focus.distance < 0.6 ? 'Media' : 'Lejos'}
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Tiempo de Estabilización (ms)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Tiempo de espera para que la cámara se estabilice antes de capturar.<br/>
+                      <strong>¿Cuándo usar?</strong> Valores altos (1500-2000ms) para mejor estabilidad, bajos (500-1000ms) para captura rápida.
+                    </p>
                     <input
                       type="number"
                       value={cameraConfig.focus.stabilizationTime}
@@ -323,12 +355,20 @@ const Config: React.FC = () => {
 
               {/* Procesamiento */}
               <div>
-                <h3 className="text-lg font-medium text-white mb-3">Procesamiento de Imagen</h3>
+                <h3 className="text-lg font-medium text-white mb-2">🎨 Procesamiento de Imagen</h3>
+                <p className="text-xs text-gray-400 mb-3">
+                  💡 <strong>¿Qué hace?</strong> Aplica filtros a las imágenes procesadas para mejorar la legibilidad del texto. 
+                  <strong>¿Cuándo usar?</strong> Contraste alto y saturación baja para mejor OCR.
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Contraste
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Aumenta la diferencia entre colores claros y oscuros.<br/>
+                      <strong>¿Cuándo usar?</strong> Valores altos (1.5-2.0) mejoran la legibilidad del texto.
+                    </p>
                     <input
                       type="range"
                       min="0.5"
@@ -341,13 +381,17 @@ const Config: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.processing.filters.contrast.toFixed(1)}
+                      {cameraConfig.processing.filters.contrast.toFixed(1)} - {cameraConfig.processing.filters.contrast < 1.0 ? 'Bajo' : cameraConfig.processing.filters.contrast < 2.0 ? 'Medio' : 'Alto'}
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Brillo
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Ajusta la luminosidad general de la imagen.<br/>
+                      <strong>¿Cuándo usar?</strong> Valores medios (1.0-1.3) compensan imágenes muy oscuras o claras.
+                    </p>
                     <input
                       type="range"
                       min="0.5"
@@ -360,13 +404,17 @@ const Config: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.processing.filters.brightness.toFixed(1)}
+                      {cameraConfig.processing.filters.brightness.toFixed(1)} - {cameraConfig.processing.filters.brightness < 0.8 ? 'Oscuro' : cameraConfig.processing.filters.brightness < 1.2 ? 'Normal' : 'Brillante'}
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Saturación
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Controla la intensidad de los colores.<br/>
+                      <strong>¿Cuándo usar?</strong> Valores bajos (0.1-0.3) mejoran el OCR al reducir distracciones de color.
+                    </p>
                     <input
                       type="range"
                       min="0.0"
@@ -379,7 +427,7 @@ const Config: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.processing.filters.saturation.toFixed(1)}
+                      {cameraConfig.processing.filters.saturation.toFixed(1)} - {cameraConfig.processing.filters.saturation < 0.3 ? 'Baja' : cameraConfig.processing.filters.saturation < 0.8 ? 'Media' : 'Alta'}
                     </div>
                   </div>
                 </div>

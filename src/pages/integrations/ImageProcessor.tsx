@@ -335,6 +335,10 @@ const ImageProcessor: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Preset de Configuración
                 </label>
+                <p className="text-xs text-gray-400 mb-3">
+                  💡 <strong>¿Qué hace?</strong> Aplica configuraciones predefinidas optimizadas para diferentes escenarios. 
+                  <strong>¿Cuándo usar?</strong> Para obtener rápidamente configuraciones probadas para casos específicos.
+                </p>
                 <div className="flex flex-wrap gap-2 mb-4">
                   {presets.map((preset) => (
                     <button
@@ -351,16 +355,27 @@ const ImageProcessor: React.FC = () => {
                     </button>
                   ))}
                 </div>
+                <div className="text-xs text-gray-400 space-y-1">
+                  <p><strong>📄 Documento:</strong> Para documentos físicos (papel, libros) - resolución media, enfoque cercano</p>
+                  <p><strong>📱 Pantalla:</strong> Para pantallas de computadora - alta resolución, optimizado para texto pequeño</p>
+                  <p><strong>📱 Móvil:</strong> Para dispositivos con poca memoria - resolución baja, calidad reducida</p>
+                </div>
               </div>
 
-              {/* Resolución */}
-              <div>
-                <h3 className="text-lg font-medium text-white mb-3">Resolución</h3>
+              {/* Configuración de Cámara (Solo para captura) */}
+              <div className="border-l-4 border-yellow-500 pl-4">
+                <h3 className="text-lg font-medium text-white mb-2">📷 Configuración de Cámara</h3>
+                <p className="text-xs text-gray-400 mb-3">
+                  ⚠️ <strong>Importante:</strong> Estos parámetros solo afectan cuando usas la cámara para capturar imágenes. 
+                  <strong>NO tienen efecto</strong> en imágenes que subes desde archivos.
+                </p>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Ancho (px)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">Resolución horizontal de la cámara</p>
                     <input
                       type="number"
                       value={cameraConfig.resolution.width}
@@ -374,6 +389,7 @@ const ImageProcessor: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Alto (px)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">Resolución vertical de la cámara</p>
                     <input
                       type="number"
                       value={cameraConfig.resolution.height}
@@ -387,6 +403,7 @@ const ImageProcessor: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Frame Rate (fps)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">Fotogramas por segundo de la cámara</p>
                     <input
                       type="number"
                       value={cameraConfig.resolution.frameRate}
@@ -400,6 +417,7 @@ const ImageProcessor: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Aspect Ratio
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">Proporción de la imagen capturada</p>
                     <select
                       value={cameraConfig.resolution.aspectRatio}
                       onChange={(e) => updateResolution({ aspectRatio: parseFloat(e.target.value) })}
@@ -417,10 +435,14 @@ const ImageProcessor: React.FC = () => {
               <div>
                 <h3 className="text-lg font-medium text-white mb-3">Calidad</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                  <div className="border-l-4 border-yellow-500 pl-4">
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Calidad de Captura (0.1 - 1.0)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      ⚠️ <strong>Solo para cámara:</strong> Calidad de la imagen al capturar con la cámara. 
+                      <strong>NO afecta</strong> imágenes subidas desde archivos.
+                    </p>
                     <input
                       type="range"
                       min="0.1"
@@ -431,13 +453,17 @@ const ImageProcessor: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.quality.screenshotQuality.toFixed(2)}
+                      {cameraConfig.quality.screenshotQuality.toFixed(2)} - {cameraConfig.quality.screenshotQuality < 0.5 ? 'Baja' : cameraConfig.quality.screenshotQuality < 0.8 ? 'Media' : 'Alta'}
                     </div>
                   </div>
-                  <div>
+                  <div className="border-l-4 border-green-500 pl-4">
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Calidad de Optimización (0.1 - 1.0)
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      ✅ <strong>Afecta procesamiento:</strong> Calidad de compresión JPEG al exportar la imagen procesada. 
+                      <strong>Valores altos</strong> = mejor calidad, archivo más grande.
+                    </p>
                     <input
                       type="range"
                       min="0.1"
@@ -448,20 +474,28 @@ const ImageProcessor: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.quality.optimizationQuality.toFixed(2)}
+                      {cameraConfig.quality.optimizationQuality.toFixed(2)} - {cameraConfig.quality.optimizationQuality < 0.5 ? 'Baja' : cameraConfig.quality.optimizationQuality < 0.8 ? 'Media' : 'Alta'}
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Filtros de procesamiento */}
-              <div>
-                <h3 className="text-lg font-medium text-white mb-3">Filtros de Procesamiento</h3>
+              <div className="border-l-4 border-green-500 pl-4">
+                <h3 className="text-lg font-medium text-white mb-2">🎨 Filtros de Procesamiento</h3>
+                <p className="text-xs text-gray-400 mb-3">
+                  ✅ <strong>Afecta procesamiento:</strong> Estos filtros se aplican a la imagen procesada para mejorar la legibilidad del texto. 
+                  <strong>Valores recomendados:</strong> Contraste alto, brillo medio, saturación baja para OCR.
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Contraste
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Aumenta la diferencia entre colores claros y oscuros.<br/>
+                      <strong>¿Cuándo usar?</strong> Valores altos (1.5-2.0) mejoran la legibilidad del texto.
+                    </p>
                     <input
                       type="range"
                       min="0.5"
@@ -474,13 +508,17 @@ const ImageProcessor: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.processing.filters.contrast.toFixed(1)}
+                      {cameraConfig.processing.filters.contrast.toFixed(1)} - {cameraConfig.processing.filters.contrast < 1.0 ? 'Bajo' : cameraConfig.processing.filters.contrast < 2.0 ? 'Medio' : 'Alto'}
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Brillo
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Ajusta la luminosidad general de la imagen.<br/>
+                      <strong>¿Cuándo usar?</strong> Valores medios (1.0-1.3) compensan imágenes muy oscuras o claras.
+                    </p>
                     <input
                       type="range"
                       min="0.5"
@@ -493,13 +531,17 @@ const ImageProcessor: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.processing.filters.brightness.toFixed(1)}
+                      {cameraConfig.processing.filters.brightness.toFixed(1)} - {cameraConfig.processing.filters.brightness < 0.8 ? 'Oscuro' : cameraConfig.processing.filters.brightness < 1.2 ? 'Normal' : 'Brillante'}
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Saturación
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Controla la intensidad de los colores.<br/>
+                      <strong>¿Cuándo usar?</strong> Valores bajos (0.1-0.3) mejoran el OCR al reducir distracciones de color.
+                    </p>
                     <input
                       type="range"
                       min="0.0"
@@ -512,20 +554,28 @@ const ImageProcessor: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.processing.filters.saturation.toFixed(1)}
+                      {cameraConfig.processing.filters.saturation.toFixed(1)} - {cameraConfig.processing.filters.saturation < 0.3 ? 'Baja' : cameraConfig.processing.filters.saturation < 0.8 ? 'Media' : 'Alta'}
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Coeficientes de escala de grises */}
-              <div>
-                <h3 className="text-lg font-medium text-white mb-3">Escala de Grises</h3>
+              <div className="border-l-4 border-green-500 pl-4">
+                <h3 className="text-lg font-medium text-white mb-2">⚫ Escala de Grises</h3>
+                <p className="text-xs text-gray-400 mb-3">
+                  ✅ <strong>Afecta procesamiento:</strong> Convierte la imagen a escala de grises usando pesos personalizados para cada canal de color. 
+                  <strong>¿Cuándo usar?</strong> Para mejorar el OCR, especialmente en pantallas donde el verde es más legible.
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Peso Rojo
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Controla cuánto contribuye el canal rojo al gris final.<br/>
+                      <strong>Valor recomendado:</strong> 0.299 (estándar sRGB)
+                    </p>
                     <input
                       type="range"
                       min="0.0"
@@ -538,13 +588,17 @@ const ImageProcessor: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.processing.grayscale.redWeight.toFixed(3)}
+                      {cameraConfig.processing.grayscale.redWeight.toFixed(3)} - {cameraConfig.processing.grayscale.redWeight < 0.2 ? 'Bajo' : cameraConfig.processing.grayscale.redWeight < 0.4 ? 'Medio' : 'Alto'}
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Peso Verde
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Controla cuánto contribuye el canal verde al gris final.<br/>
+                      <strong>Valor recomendado:</strong> 0.587 (más peso para pantallas LCD/LED)
+                    </p>
                     <input
                       type="range"
                       min="0.0"
@@ -557,13 +611,17 @@ const ImageProcessor: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.processing.grayscale.greenWeight.toFixed(3)}
+                      {cameraConfig.processing.grayscale.greenWeight.toFixed(3)} - {cameraConfig.processing.grayscale.greenWeight < 0.4 ? 'Bajo' : cameraConfig.processing.grayscale.greenWeight < 0.6 ? 'Medio' : 'Alto'}
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Peso Azul
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>¿Qué hace?</strong> Controla cuánto contribuye el canal azul al gris final.<br/>
+                      <strong>Valor recomendado:</strong> 0.114 (menor peso, menos legible en pantallas)
+                    </p>
                     <input
                       type="range"
                       min="0.0"
@@ -576,9 +634,15 @@ const ImageProcessor: React.FC = () => {
                       className="w-full"
                     />
                     <div className="text-xs text-gray-400 mt-1">
-                      {cameraConfig.processing.grayscale.blueWeight.toFixed(3)}
+                      {cameraConfig.processing.grayscale.blueWeight.toFixed(3)} - {cameraConfig.processing.grayscale.blueWeight < 0.1 ? 'Bajo' : cameraConfig.processing.grayscale.blueWeight < 0.2 ? 'Medio' : 'Alto'}
                     </div>
                   </div>
+                </div>
+                <div className="mt-3 p-3 bg-gray-600 rounded-lg">
+                  <p className="text-xs text-gray-300">
+                    <strong>💡 Tip:</strong> Los pesos deben sumar aproximadamente 1.0. Para pantallas, aumenta el verde y reduce el azul. 
+                    Para documentos impresos, usa los valores estándar (0.299, 0.587, 0.114).
+                  </p>
                 </div>
               </div>
 
@@ -599,12 +663,25 @@ const ImageProcessor: React.FC = () => {
           {/* Información adicional */}
           <div className="mt-6 p-4 bg-gray-700 rounded-lg">
             <h3 className="text-sm font-medium text-gray-300 mb-2">ℹ️ Información</h3>
-            <div className="text-xs text-gray-400 space-y-1">
-              <p>• Esta herramienta te permite probar diferentes parámetros de procesamiento de imágenes para optimizar el OCR</p>
-              <p>• Los parámetros se guardan automáticamente en localStorage y se sincronizan con la página de configuración</p>
-              <p>• <strong>Nuevo flujo:</strong> Sube una imagen, ajusta los parámetros, y haz clic en "Aplicar" para procesarla</p>
-              <p>• Puedes modificar los parámetros y volver a aplicar para ver los cambios en tiempo real</p>
-              <p>• Los metadatos muestran el tamaño de archivo y las dimensiones de ambas imágenes</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h4 className="text-xs font-medium text-gray-300 mb-2">🖼️ Procesamiento de Imagen</h4>
+                <ul className="text-xs text-gray-400 space-y-1">
+                  <li>• <strong>Verde:</strong> Parámetros que SÍ afectan el procesamiento</li>
+                  <li>• <strong>Amarillo:</strong> Parámetros solo para cámara (NO afectan archivos subidos)</li>
+                  <li>• <strong>Nuevo flujo:</strong> Sube → Ajusta → Aplica → Compara</li>
+                  <li>• Puedes modificar y re-aplicar para ver cambios en tiempo real</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="text-xs font-medium text-gray-300 mb-2">⚙️ Configuración</h4>
+                <ul className="text-xs text-gray-400 space-y-1">
+                  <li>• Los parámetros se guardan automáticamente en localStorage</li>
+                  <li>• Se sincronizan con la página de configuración</li>
+                  <li>• Los metadatos muestran dimensiones y tamaño de archivo</li>
+                  <li>• Usa presets para configuraciones probadas</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
