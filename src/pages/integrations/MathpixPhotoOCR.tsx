@@ -28,6 +28,7 @@ const MathpixPhotoOCR: React.FC = () => {
   const [photo, setPhoto] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isFocusing, setIsFocusing] = useState(false);
   const webcamRef = useRef<Webcam>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const imageCaptureRef = useRef<any>(null);
@@ -37,14 +38,116 @@ const MathpixPhotoOCR: React.FC = () => {
   const [result, setResult] = useState<MathpixResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Estados para debugging y información
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [imageInfo, setImageInfo] = useState<{
+    size: string;
+    dimensions: string;
+    format: string;
+  } | null>(null);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+
   // Obtener credenciales de Mathpix
   const appId = getCredentialByKey('mathpix_app_id');
   const apiKey = getCredentialByKey('mathpix_api_key');
+
+  // Función para agregar logs de debug
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugLogs(prev => [...prev.slice(-9), `[${timestamp}] ${message}`]);
+    console.log(`[MathpixPhotoOCR] ${message}`);
+  };
+
+  // Función para redimensionar imagen
+  const resizeImage = (dataUrl: string, maxWidth: number = 1920, maxHeight: number = 1080, quality: number = 0.8): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+
+        // Calcular nuevas dimensiones manteniendo aspect ratio
+        if (width > height) {
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(resizedDataUrl);
+        } else {
+          resolve(dataUrl);
+        }
+      };
+      img.src = dataUrl;
+    });
+  };
+
+  // Función para obtener información de la imagen
+  const getImageInfo = (dataUrl: string) => {
+    const base64Data = dataUrl.split(',')[1];
+    const mimeType = dataUrl.split(',')[0].split(':')[1].split(';')[0];
+    const imageType = mimeType.split('/')[1];
+    
+    // Calcular tamaño aproximado
+    const sizeInBytes = (base64Data.length * 3) / 4;
+    const sizeInMB = sizeInBytes / (1024 * 1024);
+    
+    // Obtener dimensiones
+    return new Promise<{size: string, dimensions: string, format: string}>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        resolve({
+          size: `${sizeInMB.toFixed(2)} MB`,
+          dimensions: `${img.width} × ${img.height}`,
+          format: imageType.toUpperCase()
+        });
+      };
+      img.src = dataUrl;
+    });
+  };
+
+  // Función para enfocar la cámara
+  const focusCamera = useCallback(async (): Promise<boolean> => {
+    if (!streamRef.current) return false;
+
+    try {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (!track) return false;
+
+      // Aplicar constraints de enfoque
+      await track.applyConstraints({
+        advanced: [
+          { focusMode: 'single-shot' },
+          { focusDistance: 0.1 }
+        ]
+      } as any);
+
+      addDebugLog('Enfoque aplicado');
+      return true;
+    } catch (error) {
+      addDebugLog(`Error al enfocar: ${error}`);
+      return false;
+    }
+  }, []);
 
   // Funciones de la cámara
   const startCamera = () => {
     setError(null);
     setIsCameraOn(true);
+    addDebugLog('Iniciando cámara...');
   };
 
   const stopCamera = () => {
@@ -54,6 +157,7 @@ const MathpixPhotoOCR: React.FC = () => {
     } catch {}
     streamRef.current = null;
     imageCaptureRef.current = null;
+    addDebugLog('Cámara detenida');
   };
 
   const blobToDataUrl = (blob: Blob): Promise<string> =>
@@ -66,14 +170,24 @@ const MathpixPhotoOCR: React.FC = () => {
 
   const capturePhoto = useCallback(async () => {
     if (!webcamRef.current) {
-      console.error('Webcam no está disponible');
+      addDebugLog('Error: Webcam no disponible');
       setError('La cámara no está disponible');
       return;
     }
 
     setIsCapturing(true);
+    setIsFocusing(true);
+    addDebugLog('Iniciando captura de foto...');
     
     try {
+      // Intentar enfocar antes de capturar
+      const focused = await focusCamera();
+      if (focused) {
+        // Esperar un momento para que el enfoque se estabilice
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        addDebugLog('Enfoque completado');
+      }
+
       // Intentar ImageCapture para obtener foto a resolución nativa
       const track = streamRef.current?.getVideoTracks?.()[0];
       if (track && 'ImageCapture' in window) {
@@ -84,12 +198,17 @@ const MathpixPhotoOCR: React.FC = () => {
         try {
           const blob: Blob = await imageCaptureRef.current.takePhoto();
           const dataUrl = await blobToDataUrl(blob);
+          
+          // Obtener información de la imagen
+          const info = await getImageInfo(dataUrl);
+          setImageInfo(info);
+          addDebugLog(`Imagen capturada: ${info.dimensions}, ${info.size}`);
+          
           setPhoto(dataUrl);
           setError(null);
-          console.log('Foto capturada a resolución nativa con ImageCapture');
           return;
         } catch (icErr) {
-          console.warn('Fallo ImageCapture, usando getScreenshot', icErr);
+          addDebugLog(`ImageCapture falló: ${icErr}`);
         }
       }
 
@@ -97,36 +216,42 @@ const MathpixPhotoOCR: React.FC = () => {
       const imageSrc = webcamRef.current.getScreenshot();
       
       if (imageSrc) {
+        // Obtener información de la imagen
+        const info = await getImageInfo(imageSrc);
+        setImageInfo(info);
+        addDebugLog(`Imagen capturada (fallback): ${info.dimensions}, ${info.size}`);
+        
         setPhoto(imageSrc);
         setError(null);
-        console.log('Foto capturada con getScreenshot');
       } else {
-        console.error('Error al capturar la foto');
-        setError('Error al capturar la foto. Intenta de nuevo.');
+        throw new Error('No se pudo capturar la imagen');
       }
     } catch (err) {
-      console.error('Error durante la captura:', err);
-      setError('Error al capturar la foto. Intenta de nuevo.');
+      addDebugLog(`Error durante captura: ${err}`);
+      setError(err instanceof Error ? err.message : 'Error al capturar la foto. Intenta de nuevo.');
     } finally {
       setIsCapturing(false);
+      setIsFocusing(false);
     }
-  }, []);
+  }, [focusCamera]);
 
   const clearPhoto = () => {
     setPhoto(null);
     setResult(null);
     setError(null);
+    setImageInfo(null);
+    addDebugLog('Foto eliminada');
   };
 
   const onUserMedia = async (stream: MediaStream) => {
-    console.log('Cámara conectada exitosamente');
+    addDebugLog('Cámara conectada exitosamente');
     setError(null);
     streamRef.current = stream;
 
     try {
       const track = stream.getVideoTracks()[0];
       // Solicitar autoenfoque y ajustes continuos cuando sea posible
-      await (track as any).applyConstraints({
+      await track.applyConstraints({
         advanced: [
           { focusMode: 'continuous' },
           { whiteBalanceMode: 'continuous' },
@@ -138,21 +263,25 @@ const MathpixPhotoOCR: React.FC = () => {
         try {
           // @ts-ignore
           imageCaptureRef.current = new (window as any).ImageCapture(track);
+          addDebugLog('ImageCapture inicializado');
         } catch {}
       }
     } catch (e) {
-      console.warn('No se pudieron aplicar constraints avanzados:', e);
+      addDebugLog(`No se pudieron aplicar constraints avanzados: ${e}`);
     }
   };
 
   const onUserMediaError = (error: string | DOMException) => {
-    console.error('Error de cámara:', error);
+    addDebugLog(`Error de cámara: ${error}`);
     setError('No se pudo acceder a la cámara. Verifica los permisos.');
   };
 
   // Función para procesar la foto con Mathpix
   const processPhoto = async () => {
-    if (!photo) return;
+    if (!photo) {
+      setError('No hay foto para procesar');
+      return;
+    }
 
     // Verificar que las credenciales estén disponibles
     if (!appId || !apiKey) {
@@ -163,14 +292,46 @@ const MathpixPhotoOCR: React.FC = () => {
     setIsProcessing(true);
     setError(null);
     setResult(null);
+    addDebugLog('Iniciando procesamiento con Mathpix...');
 
     try {
+      // Validar formato de data URL
+      if (!photo.startsWith('data:image/')) {
+        throw new Error('Formato de imagen inválido');
+      }
+
       // Convertir data URL a base64
       const base64Data = photo.split(',')[1];
+      if (!base64Data) {
+        throw new Error('No se pudo extraer los datos de la imagen');
+      }
+
+      // Validar tamaño de la imagen (Mathpix tiene límite de 5MB)
+      const imageSizeInBytes = (base64Data.length * 3) / 4;
+      const imageSizeInMB = imageSizeInBytes / (1024 * 1024);
       
-      // Determinar el tipo de imagen
-      const mimeType = photo.split(',')[0].split(':')[1].split(';')[0];
-      const imageType = mimeType.split('/')[1];
+      addDebugLog(`Tamaño de imagen: ${imageSizeInMB.toFixed(2)}MB`);
+
+      let processedPhoto = photo;
+
+      // Si la imagen es muy grande, redimensionarla
+      if (imageSizeInMB > 5) {
+        addDebugLog('Imagen muy grande, redimensionando...');
+        processedPhoto = await resizeImage(photo, 1920, 1080, 0.8);
+        
+        // Recalcular tamaño después de redimensionar
+        const newBase64Data = processedPhoto.split(',')[1];
+        const newSizeInBytes = (newBase64Data.length * 3) / 4;
+        const newSizeInMB = newSizeInBytes / (1024 * 1024);
+        addDebugLog(`Nuevo tamaño: ${newSizeInMB.toFixed(2)}MB`);
+      }
+
+      // Usar la imagen procesada
+      const finalBase64Data = processedPhoto.split(',')[1];
+      const finalMimeType = processedPhoto.split(',')[0].split(':')[1].split(';')[0];
+      const finalImageType = finalMimeType.split('/')[1];
+
+      addDebugLog(`Enviando a Mathpix: ${finalImageType}, ${(finalBase64Data.length * 3 / 4 / (1024 * 1024)).toFixed(2)}MB`);
 
       // Hacer request a Mathpix API
       const response = await fetch('https://api.mathpix.com/v3/text', {
@@ -181,7 +342,7 @@ const MathpixPhotoOCR: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          src: `data:image/${imageType};base64,${base64Data}`,
+          src: `data:image/${finalImageType};base64,${finalBase64Data}`,
           formats: ['text', 'latex_styled', 'data'],
           data_options: {
             include_asciimath: true,
@@ -190,16 +351,27 @@ const MathpixPhotoOCR: React.FC = () => {
         }),
       });
 
+      addDebugLog(`Respuesta de Mathpix: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`);
+        let errorMessage = `Error ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+          addDebugLog(`Error detallado: ${JSON.stringify(errorData)}`);
+        } catch (parseError) {
+          addDebugLog(`No se pudo parsear el error: ${parseError}`);
+        }
+        throw new Error(errorMessage);
       }
 
       const data: MathpixResponse = await response.json();
+      addDebugLog(`Procesamiento exitoso. Confianza: ${Math.round(data.confidence_rate * 100)}%`);
       setResult(data);
     } catch (err) {
-      console.error('Error processing photo:', err);
-      setError(err instanceof Error ? err.message : 'Error al procesar la foto');
+      addDebugLog(`Error: ${err}`);
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido al procesar la foto';
+      setError(errorMessage);
     } finally {
       setIsProcessing(false);
     }
@@ -249,14 +421,26 @@ const MathpixPhotoOCR: React.FC = () => {
 
       {error && (
         <div className="mb-6 p-4 bg-red-900/30 border border-red-500 rounded-lg text-red-400 text-center">
-          {error}
+          <div className="flex items-center justify-center mb-2">
+            <span className="text-xl mr-2">❌</span>
+            <span className="font-medium">Error:</span>
+          </div>
+          <p>{error}</p>
         </div>
       )}
 
       <div className="space-y-6">
         {/* Controles de cámara */}
         <div className="bg-gray-700 rounded-lg p-6">
-          <h3 className="text-lg font-medium text-white mb-4">📹 Cámara</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-white">📹 Cámara</h3>
+            <button
+              onClick={() => setShowDebugInfo(!showDebugInfo)}
+              className="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded transition-colors"
+            >
+              {showDebugInfo ? 'Ocultar Debug' : 'Mostrar Debug'}
+            </button>
+          </div>
           
           <div className="flex flex-wrap gap-3 justify-center mb-4">
             {!isCameraOn ? (
@@ -280,7 +464,11 @@ const MathpixPhotoOCR: React.FC = () => {
                   disabled={isCapturing}
                   className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors duration-200 flex items-center gap-2"
                 >
-                  {isCapturing ? '📸 Capturando...' : '📸 Tomar Foto'}
+                  {isCapturing ? (
+                    isFocusing ? '🎯 Enfocando...' : '📸 Capturando...'
+                  ) : (
+                    '📸 Tomar Foto'
+                  )}
                 </button>
               </>
             )}
@@ -305,7 +493,26 @@ const MathpixPhotoOCR: React.FC = () => {
                 className="w-full h-auto max-h-96 object-cover"
               />
               <div className="absolute top-4 right-4">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                <div className={`w-3 h-3 rounded-full animate-pulse ${
+                  isFocusing ? 'bg-yellow-500' : 'bg-green-500'
+                }`}></div>
+              </div>
+              {isFocusing && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                  <div className="text-white text-lg font-semibold">🎯 Enfocando...</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Información de debug */}
+          {showDebugInfo && (
+            <div className="mt-4 p-4 bg-gray-800 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-300 mb-2">Debug Info:</h4>
+              <div className="text-xs text-gray-400 space-y-1 max-h-32 overflow-y-auto">
+                {debugLogs.map((log, index) => (
+                  <div key={index}>{log}</div>
+                ))}
               </div>
             </div>
           )}
@@ -324,6 +531,27 @@ const MathpixPhotoOCR: React.FC = () => {
                   className="w-full h-auto max-h-96 object-contain mx-auto"
                 />
               </div>
+
+              {/* Información de la imagen */}
+              {imageInfo && (
+                <div className="bg-gray-800 rounded-lg p-3">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">Información de la imagen:</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-400">Tamaño:</span>
+                      <div className="text-white font-medium">{imageInfo.size}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Dimensiones:</span>
+                      <div className="text-white font-medium">{imageInfo.dimensions}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Formato:</span>
+                      <div className="text-white font-medium">{imageInfo.format}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               <div className="flex flex-wrap gap-3 justify-center">
                 <button
@@ -424,9 +652,10 @@ const MathpixPhotoOCR: React.FC = () => {
             <li>• Haz clic en "Activar Cámara" para comenzar</li>
             <li>• Permite el acceso a la cámara cuando se solicite</li>
             <li>• Posiciona la cámara sobre contenido matemático</li>
-            <li>• Haz clic en "Tomar Foto" para capturar</li>
+            <li>• Haz clic en "Tomar Foto" - la cámara enfocará automáticamente</li>
             <li>• Haz clic en "Procesar con Mathpix" para analizar</li>
             <li>• Los resultados incluyen texto y LaTeX formateado</li>
+            <li>• Usa "Mostrar Debug" para ver información técnica</li>
           </ul>
         </div>
       </div>
