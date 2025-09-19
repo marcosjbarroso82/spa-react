@@ -1,11 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import Webcam from 'react-webcam';
 import { useCredentials } from '../../hooks/useCredentials';
-
-// URLs de Flowise (mismas que en AnswerFromImage)
-const ANALIZA_ENUNCIADO_URL = 'https://flowise.ia-ai.com/api/v1/prediction/4a4a4a4a-4a4a-4a4a-4a4a-4a4a4a4a4a4a';
-const RAG_CON_RESPUESTAS_URL = 'https://flowise.ia-ai.com/api/v1/prediction/5b5b5b5b-5b5b-5b5b-5b5b-5b5b5b5b5b5b';
-const HERRAMIENTAS_CON_RESPUESTAS_URL = 'https://flowise.ia-ai.com/api/v1/prediction/6c6c6c6c-6c6c-6c6c-6c6c-6c6c6c6c6c6c';
+import { useVariables } from '../../hooks/useVariables';
 
 interface FlowiseResponse {
   response?: {
@@ -19,6 +15,7 @@ type InputMode = 'file' | 'camera';
 
 const AnswerFromImageUX: React.FC = () => {
   const { getCredentialByKey, isLoading: credentialsLoading } = useCredentials();
+  const { getVariableByKey, isLoading: variablesLoading } = useVariables();
   const [inputMode, setInputMode] = useState<InputMode>('file');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
@@ -43,8 +40,23 @@ const AnswerFromImageUX: React.FC = () => {
 
   const appId = getCredentialByKey('mathpix_app_id');
   const apiKey = getCredentialByKey('mathpix_api_key');
+  
+  // Obtener URLs de las variables
+  const analizaEnunciadoUrl = getVariableByKey('ANALIZA_ENUNCIADO_URL');
+  const ragConRespuestasUrl = getVariableByKey('RAG_CON_RESPUESTAS_URL');
+  const herramientasConRespuestasUrl = getVariableByKey('HERRAMIENTAS_CON_RESPUESTAS_URL');
 
-  const canProcess = useMemo(() => selectedFiles.length > 0 && !!appId && !!apiKey && !credentialsLoading, [selectedFiles, appId, apiKey, credentialsLoading]);
+  const canProcess = useMemo(() => 
+    selectedFiles.length > 0 && 
+    !!appId && 
+    !!apiKey && 
+    !!analizaEnunciadoUrl && 
+    !!ragConRespuestasUrl && 
+    !!herramientasConRespuestasUrl && 
+    !credentialsLoading && 
+    !variablesLoading, 
+    [selectedFiles, appId, apiKey, analizaEnunciadoUrl, ragConRespuestasUrl, herramientasConRespuestasUrl, credentialsLoading, variablesLoading]
+  );
 
   // Función para procesar la cola de speech
   const processSpeechQueue = () => {
@@ -266,7 +278,7 @@ const AnswerFromImageUX: React.FC = () => {
   };
 
   const process = async () => {
-    if (selectedFiles.length === 0 || !appId || !apiKey) return;
+    if (selectedFiles.length === 0 || !appId || !apiKey || !analizaEnunciadoUrl || !ragConRespuestasUrl || !herramientasConRespuestasUrl) return;
     setIsProcessing(true);
     setError(null);
     setLecturas([]);
@@ -329,7 +341,7 @@ const AnswerFromImageUX: React.FC = () => {
       }
 
       console.log('[AnswerFromImageUX] Llamando Flowise: Analiza Enunciado');
-      const analizaRes = await fetch(ANALIZA_ENUNCIADO_URL, {
+      const analizaRes = await fetch(analizaEnunciadoUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: compiledText }),
@@ -360,8 +372,8 @@ const AnswerFromImageUX: React.FC = () => {
       const payload = JSON.stringify({ question: outputToSend });
 
       const [ragRes, toolsRes] = await Promise.all([
-        fetch(RAG_CON_RESPUESTAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }),
-        fetch(HERRAMIENTAS_CON_RESPUESTAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }),
+        fetch(ragConRespuestasUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }),
+        fetch(herramientasConRespuestasUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }),
       ]);
 
       const [ragCt, toolsCt] = [ragRes.headers.get('content-type') || '', toolsRes.headers.get('content-type') || ''];
@@ -409,15 +421,33 @@ const AnswerFromImageUX: React.FC = () => {
     }
   };
 
-  if (credentialsLoading) {
-    return <div className="text-center py-8 text-white">Cargando credenciales…</div>;
+  if (credentialsLoading || variablesLoading) {
+    return <div className="text-center py-8 text-white">Cargando configuración…</div>;
   }
+  
   if (!appId || !apiKey) {
     return (
       <div className="text-center py-8">
         <div className="text-6xl mb-4">🖼️</div>
         <h2 className="text-2xl font-semibold mb-4 text-yellow-400">Credenciales de Mathpix Requeridas</h2>
         <p className="text-gray-300 mb-4">Configura <strong>mathpix_app_id</strong> y <strong>mathpix_api_key</strong> en Configuración.</p>
+      </div>
+    );
+  }
+  
+  if (!analizaEnunciadoUrl || !ragConRespuestasUrl || !herramientasConRespuestasUrl) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-6xl mb-4">🔧</div>
+        <h2 className="text-2xl font-semibold mb-4 text-yellow-400">Variables de Configuración Requeridas</h2>
+        <p className="text-gray-300 mb-4">Configura las siguientes variables en Configuración:</p>
+        <div className="bg-gray-700 rounded-lg p-4 max-w-md mx-auto">
+          <ul className="text-left text-gray-300 space-y-2">
+            <li>• <strong>ANALIZA_ENUNCIADO_URL</strong></li>
+            <li>• <strong>RAG_CON_RESPUESTAS_URL</strong></li>
+            <li>• <strong>HERRAMIENTAS_CON_RESPUESTAS_URL</strong></li>
+          </ul>
+        </div>
       </div>
     );
   }

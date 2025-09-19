@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCredentials } from '../hooks/useCredentials';
+import { useVariables } from '../hooks/useVariables';
 
 const Config: React.FC = () => {
   const { 
@@ -11,6 +12,16 @@ const Config: React.FC = () => {
     removeCredential, 
     updateCredential
   } = useCredentials();
+  
+  const {
+    variables,
+    isLoading: variablesLoading,
+    saveVariables,
+    addVariable,
+    updateVariable,
+    removeVariable,
+    clearVariables
+  } = useVariables();
   
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -41,9 +52,41 @@ const Config: React.FC = () => {
     }
   };
 
+  const handleVariablesSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validación básica - al menos una variable debe tener clave y valor
+    const validItems = variables.items.filter(item => item.key.trim() && item.value.trim());
+    
+    if (validItems.length === 0) {
+      setMessage({ type: 'error', text: 'Debe agregar al menos una variable con clave y valor' });
+      return;
+    }
+
+    // Verificar claves duplicadas
+    const keys = validItems.map(item => item.key.toLowerCase());
+    const uniqueKeys = new Set(keys);
+    if (keys.length !== uniqueKeys.size) {
+      setMessage({ type: 'error', text: 'No puede haber claves duplicadas en las variables' });
+      return;
+    }
+
+    try {
+      saveVariables(variables);
+      setMessage({ type: 'success', text: 'Variables guardadas correctamente' });
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Error al guardar las variables' });
+    }
+  };
+
   const handleClear = () => {
     clearCredentials();
     setMessage({ type: 'success', text: 'Credenciales eliminadas' });
+  };
+
+  const handleVariablesClear = () => {
+    clearVariables();
+    setMessage({ type: 'success', text: 'Variables eliminadas' });
   };
 
   const handleAddCredential = () => {
@@ -56,7 +99,7 @@ const Config: React.FC = () => {
     setMessage(null);
   };
 
-  if (isLoading) {
+  if (isLoading || variablesLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-white text-lg">Cargando...</div>
@@ -82,24 +125,108 @@ const Config: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Lista de credenciales */}
-            <div>
+          {/* Sección de Variables */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">🔧 Variables de Configuración</h2>
+            <form onSubmit={handleVariablesSubmit} className="space-y-4">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-medium text-white">Credenciales</h2>
+                <h3 className="text-lg font-medium text-white">Variables</h3>
+                <button
+                  type="button"
+                  onClick={addVariable}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                >
+                  ➕ Agregar Variable
+                </button>
+              </div>
+
+              {variables.items.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <p>No hay variables configuradas</p>
+                  <p className="text-sm">Haz clic en "Agregar Variable" para comenzar</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {variables.items.map((item, index) => (
+                    <div key={item.id} className="bg-gray-700 rounded-lg p-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-300 mb-1">
+                              Clave
+                            </label>
+                            <input
+                              type="text"
+                              value={item.key}
+                              onChange={(e) => updateVariable(item.id, 'key', e.target.value)}
+                              className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                              placeholder="Ej: ANALIZA_ENUNCIADO_URL, RAG_CON_RESPUESTAS_URL, etc."
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-300 mb-1">
+                              Valor
+                            </label>
+                            <input
+                              type="text"
+                              value={item.value}
+                              onChange={(e) => updateVariable(item.id, 'value', e.target.value)}
+                              className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                              placeholder="URL o valor de la variable"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeVariable(item.id)}
+                          className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors duration-200"
+                          title="Eliminar variable"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                >
+                  💾 Guardar Variables
+                </button>
+                <button
+                  type="button"
+                  onClick={handleVariablesClear}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                >
+                  🗑️ Limpiar Variables
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Sección de Credenciales */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">🔐 Credenciales</h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-white">Credenciales</h3>
                 <button
                   type="button"
                   onClick={handleAddCredential}
                   className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
                 >
-                  ➕ Agregar
+                  ➕ Agregar Credencial
                 </button>
               </div>
 
               {credentials.items.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   <p>No hay credenciales configuradas</p>
-                  <p className="text-sm">Haz clic en "Agregar" para comenzar</p>
+                  <p className="text-sm">Haz clic en "Agregar Credencial" para comenzar</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -145,36 +272,47 @@ const Config: React.FC = () => {
                   ))}
                 </div>
               )}
-            </div>
 
-
-            {/* Botones */}
-            <div className="flex space-x-3 pt-4">
-              <button
-                type="submit"
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
-              >
-                💾 Guardar Todo
-              </button>
-              <button
-                type="button"
-                onClick={handleClear}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
-              >
-                🗑️ Limpiar Todo
-              </button>
-            </div>
-          </form>
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                >
+                  💾 Guardar Credenciales
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                >
+                  🗑️ Limpiar Credenciales
+                </button>
+              </div>
+            </form>
+          </div>
 
           {/* Información adicional */}
           <div className="mt-6 p-4 bg-gray-700 rounded-lg">
             <h3 className="text-sm font-medium text-gray-300 mb-2">ℹ️ Información</h3>
-            <ul className="text-xs text-gray-400 space-y-1">
-              <li>• Agrega tantas credenciales como necesites</li>
-              <li>• Las claves deben ser únicas (no duplicadas)</li>
-              <li>• Los valores se ocultan por seguridad</li>
-              <li>• Las credenciales se guardan automáticamente en el navegador</li>
-            </ul>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h4 className="text-xs font-medium text-gray-300 mb-1">Variables</h4>
+                <ul className="text-xs text-gray-400 space-y-1">
+                  <li>• Configura URLs de Flowise</li>
+                  <li>• Claves: ANALIZA_ENUNCIADO_URL, RAG_CON_RESPUESTAS_URL, HERRAMIENTAS_CON_RESPUESTAS_URL</li>
+                  <li>• Se guardan en localStorage</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="text-xs font-medium text-gray-300 mb-1">Credenciales</h4>
+                <ul className="text-xs text-gray-400 space-y-1">
+                  <li>• Agrega tantas credenciales como necesites</li>
+                  <li>• Las claves deben ser únicas (no duplicadas)</li>
+                  <li>• Los valores se ocultan por seguridad</li>
+                  <li>• Se guardan en localStorage</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       </div>
