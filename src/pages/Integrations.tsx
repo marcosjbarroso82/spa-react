@@ -3,6 +3,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import TTSBrowser from './integrations/TTSBrowser';
 import TakePhoto from './integrations/TakePhoto';
 import MathpixOCR from './integrations/MathpixOCR';
+import MathpixPhotoOCR from './integrations/MathpixPhotoOCR';
 import FlowiseTester from './integrations/FlowiseTester';
 import AnswerFromImage from './integrations/AnswerFromImage';
 import AnswerFromImageUX from './integrations/AnswerFromImageUX';
@@ -14,6 +15,7 @@ const Integrations: React.FC = () => {
     { path: '/integrations/tts-browser', label: 'TTS Browser', icon: '🔊', description: 'Texto a voz del navegador' },
     { path: '/integrations/take-photo', label: 'Tomar Foto', icon: '📷', description: 'Capturar foto con la cámara' },
     { path: '/integrations/mathpix-ocr', label: 'Mathpix OCR', icon: '📐', description: 'Reconocimiento óptico de matemáticas' },
+    { path: '/integrations/mathpix-photo-ocr', label: 'Mathpix Photo OCR', icon: '📷📐', description: 'Capturar y procesar matemáticas con la cámara' },
     { path: '/integrations/flowise-tester', label: 'Flowise Tester', icon: '🤖', description: 'Probar endpoints de Flowise' },
     { path: '/integrations/answer-from-image', label: 'Contestar por Imagen', icon: '🖼️', description: 'OCR con Mathpix y análisis con Flowise' },
     { path: '/integrations/answer-from-image-ux', label: 'Contestar por Imagen UX', icon: '✨', description: 'Versión mejorada con mejor experiencia de usuario' },
@@ -66,6 +68,7 @@ const Integrations: React.FC = () => {
             <Route path="/tts-browser" element={<TTSBrowser />} />
             <Route path="/take-photo" element={<TakePhoto />} />
             <Route path="/mathpix-ocr" element={<MathpixOCR />} />
+            <Route path="/mathpix-photo-ocr" element={<MathpixPhotoOCR />} />
             <Route path="/flowise-tester" element={<FlowiseTester />} />
             <Route path="/answer-from-image" element={<AnswerFromImage />} />
             <Route path="/answer-from-image-ux" element={<AnswerFromImageUX />} />
