@@ -71,18 +71,18 @@ export interface CameraConfig {
   };
 }
 
-// Configuración por defecto optimizada para preview de baja resolución
+// Configuración por defecto optimizada para OCR de pantallas de notebook
 export const defaultCameraConfig: CameraConfig = {
   resolution: {
-    width: 1280,        // Resolución HD para preview
-    height: 720,        // Mantiene proporción 16:9
-    frameRate: 24,      // Frame rate reducido para mejor rendimiento
+    width: 1920,        // Resolución Full HD para mejor detalle de texto
+    height: 1080,       // Mantiene proporción 16:9
+    frameRate: 30,      // Frame rate estándar para estabilidad
     aspectRatio: 16/9   // Proporción estándar para pantallas
   },
   
   quality: {
-    screenshotQuality: 0.7,  // Calidad reducida para preview
-    optimizationQuality: 0.8, // Calidad alta para procesamiento OCR
+    screenshotQuality: 0.85, // Calidad alta para preservar detalles de texto
+    optimizationQuality: 0.9, // Calidad muy alta para OCR
     maxWidth: 2560,           // Resolución máxima para optimización
     maxHeight: 1440           // Resolución máxima para optimización
   },
@@ -92,18 +92,18 @@ export const defaultCameraConfig: CameraConfig = {
     focusMode: 'single-shot',     // Modo por defecto: single-shot para OCR
     useContinuousFocus: false,    // No usar enfoque continuo por defecto
     autoFocusBeforeCapture: true, // Aplicar enfoque antes de capturar
-    distance: 0.3,                // 30cm - distancia típica celular-pantalla de notebook
-    stabilizationTime: 1500,      // Tiempo de estabilización reducido (ms)
+    distance: 0.35,               // 35cm - distancia óptima para pantallas de notebook
+    stabilizationTime: 2000,      // Tiempo de estabilización aumentado para mejor enfoque
     
     // Configuraciones continuas (durante la visualización)
     continuousMode: {
       focusMode: 'continuous',
       whiteBalanceMode: 'continuous',
       exposureMode: 'continuous',
-      brightness: 0.4,        // Brillo reducido para evitar reflejos
-      contrast: 0.8,          // Alto contraste para texto pequeño
-      saturation: 0.2,        // Baja saturación para pantallas RGB
-      sharpness: 0.9          // Alta nitidez para caracteres pequeños
+      brightness: 0.3,        // Brillo muy reducido para evitar reflejos de pantalla
+      contrast: 0.9,          // Contraste muy alto para texto pequeño
+      saturation: 0.1,        // Muy baja saturación para pantallas RGB
+      sharpness: 0.95         // Máxima nitidez para caracteres pequeños
     },
     
     // Configuraciones single-shot (al capturar)
@@ -111,18 +111,18 @@ export const defaultCameraConfig: CameraConfig = {
       focusMode: 'single-shot',
       exposureMode: 'single-shot',
       whiteBalanceMode: 'single-shot',
-      brightness: 0.35,       // Brillo reducido para evitar reflejos de pantalla
-      contrast: 0.85,         // Alto contraste para mejorar legibilidad de texto pequeño
-      saturation: 0.15,       // Muy baja saturación (pantallas son RGB, no necesitan color)
-      sharpness: 0.95         // Máxima nitidez para caracteres pequeños
+      brightness: 0.25,       // Brillo muy reducido para evitar reflejos de pantalla
+      contrast: 0.95,         // Contraste máximo para mejorar legibilidad de texto pequeño
+      saturation: 0.05,       // Saturación mínima (pantallas son RGB, no necesitan color)
+      sharpness: 1.0          // Nitidez máxima para caracteres pequeños
     }
   },
   
   processing: {
     filters: {
-      contrast: 1.5,          // Alto contraste para mejorar legibilidad de caracteres pequeños
-      brightness: 1.2,        // Brillo ajustado para compensar reflejos de pantalla
-      saturation: 0.1         // Baja saturación (pantallas son RGB, no necesitan color)
+      contrast: 1.8,          // Contraste muy alto para mejorar legibilidad de caracteres pequeños
+      brightness: 1.1,        // Brillo ajustado para compensar reflejos de pantalla
+      saturation: 0.05        // Saturación mínima (pantallas son RGB, no necesitan color)
     },
     grayscale: {
       redWeight: 0.299,       // Coeficientes optimizados para pantallas RGB
@@ -177,9 +177,57 @@ export const cameraPresets: Record<string, Partial<CameraConfig>> = {
     }
   },
   
-  // Para pantallas de notebook (texto pequeño)
+  // Para pantallas de notebook (texto pequeño) - Optimizado para OCR
   screen: {
-    ...defaultCameraConfig
+    resolution: {
+      width: 2560,        // Resolución 2K para máximo detalle de texto
+      height: 1440,       // Mantiene proporción 16:9
+      frameRate: 30,      // Frame rate estándar
+      aspectRatio: 16/9
+    },
+    quality: {
+      screenshotQuality: 0.9,  // Calidad máxima para OCR
+      optimizationQuality: 0.95, // Calidad muy alta para procesamiento
+      maxWidth: 2560,           // Resolución máxima
+      maxHeight: 1440           // Resolución máxima
+    },
+    focus: {
+      focusMode: 'single-shot',     // Single-shot para OCR
+      useContinuousFocus: false,    // No usar enfoque continuo
+      autoFocusBeforeCapture: true, // Enfocar antes de capturar
+      distance: 0.35,               // 35cm para pantallas de notebook
+      stabilizationTime: 2500,      // Tiempo de estabilización alto
+      continuousMode: {
+        focusMode: 'continuous',
+        whiteBalanceMode: 'continuous',
+        exposureMode: 'continuous',
+        brightness: 0.25,       // Brillo muy reducido
+        contrast: 0.95,         // Contraste máximo
+        saturation: 0.05,       // Saturación mínima
+        sharpness: 1.0          // Nitidez máxima
+      },
+      singleShotMode: {
+        focusMode: 'single-shot',
+        exposureMode: 'single-shot',
+        whiteBalanceMode: 'single-shot',
+        brightness: 0.2,        // Brillo mínimo para evitar reflejos
+        contrast: 1.0,          // Contraste máximo
+        saturation: 0.0,        // Sin saturación
+        sharpness: 1.0          // Nitidez máxima
+      }
+    },
+    processing: {
+      filters: {
+        contrast: 2.0,          // Contraste máximo para OCR
+        brightness: 1.0,        // Brillo neutro
+        saturation: 0.0         // Sin saturación
+      },
+      grayscale: {
+        redWeight: 0.299,
+        greenWeight: 0.587,
+        blueWeight: 0.114
+      }
+    }
   },
   
   // Para móviles con poca memoria
