@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import { useCredentials } from '../../hooks/useCredentials';
 import { useVariables } from '../../hooks/useVariables';
@@ -32,10 +32,8 @@ const AnswerFromImage: React.FC = () => {
   const [ocrText, setOcrText] = useState<string | null>(null);
   const [lecturas, setLecturas] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [autoRead, setAutoRead] = useState<boolean>(() => {
-    const saved = localStorage.getItem('answerFromImage_autoRead');
-    return saved === 'true';
-  });
+  // Usar la preferencia global de lectura automática
+  const autoRead = preferences.autoRead;
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isFocusing, setIsFocusing] = useState(false);
@@ -106,10 +104,6 @@ const AnswerFromImage: React.FC = () => {
     processSpeechQueue();
   };
 
-  // Guardar preferencia de autoRead en localStorage
-  useEffect(() => {
-    localStorage.setItem('answerFromImage_autoRead', autoRead.toString());
-  }, [autoRead]);
 
   // Funciones de cámara (basadas en TakePhoto.tsx)
   const startCamera = () => {
@@ -729,15 +723,21 @@ const AnswerFromImage: React.FC = () => {
         )}
 
         <div className="flex items-center space-x-3">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={autoRead}
-              onChange={(e) => setAutoRead(e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500 focus:ring-2"
-            />
-            <span className="text-sm text-gray-300">🔊 Lectura automática de respuestas</span>
-          </label>
+          <div className="flex items-center space-x-2">
+            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+              autoRead 
+                ? 'bg-green-600 border-green-600' 
+                : 'bg-gray-600 border-gray-500'
+            }`}>
+              {autoRead && <span className="text-white text-xs">✓</span>}
+            </div>
+            <span className="text-sm text-gray-300">
+              🔊 Lectura automática de respuestas {autoRead ? '(Activada)' : '(Desactivada)'}
+            </span>
+            <span className="text-xs text-gray-400 ml-2">
+              - Configurar en <strong>Configuración</strong>
+            </span>
+          </div>
         </div>
 
         {previewUrls.length > 0 && (
