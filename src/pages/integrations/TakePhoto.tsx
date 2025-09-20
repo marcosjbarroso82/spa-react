@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import { useCameraConfig } from '../../hooks/useCameraConfig';
+import CameraConfigSection from '../../components/config/CameraConfigSection';
 
 const TakePhoto: React.FC = () => {
   const { 
@@ -14,6 +15,7 @@ const TakePhoto: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isAutoCapturing, setIsAutoCapturing] = useState(false);
+  const [configMessage, setConfigMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const webcamRef = useRef<Webcam>(null);
 
   // Referencias al MediaStream y a ImageCapture para fotos a resolución nativa
@@ -205,6 +207,16 @@ const TakePhoto: React.FC = () => {
         </div>
       )}
 
+      {configMessage && (
+        <div className={`mb-6 p-4 rounded-lg text-center ${
+          configMessage.type === 'success' 
+            ? 'bg-green-900/30 border border-green-500 text-green-400' 
+            : 'bg-red-900/30 border border-red-500 text-red-400'
+        }`}>
+          {configMessage.text}
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Controles de cámara */}
         <div className="flex flex-wrap gap-3 justify-center">
@@ -309,6 +321,14 @@ const TakePhoto: React.FC = () => {
             <li>• Puedes descargar la foto o tomar otra</li>
             <li>• Haz clic en "Desactivar Cámara" cuando termines</li>
           </ul>
+        </div>
+
+        {/* Configuración de Cámara */}
+        <div className="mt-8">
+          <CameraConfigSection 
+            message={configMessage} 
+            setMessage={setConfigMessage} 
+          />
         </div>
       </div>
     </div>
