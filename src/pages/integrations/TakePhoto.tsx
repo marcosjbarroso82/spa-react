@@ -16,6 +16,9 @@ const TakePhoto: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
   const [isAutoCapturing, setIsAutoCapturing] = useState(false);
   const [configMessage, setConfigMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [actualVideoConstraints, setActualVideoConstraints] = useState<any>(null);
+  const [actualFocusConstraints, setActualFocusConstraints] = useState<any>(null);
+  const [captureValues, setCaptureValues] = useState<any>(null);
   const webcamRef = useRef<Webcam>(null);
 
   // Referencias al MediaStream y a ImageCapture para fotos a resolución nativa
@@ -53,6 +56,15 @@ const TakePhoto: React.FC = () => {
 
     setIsCapturing(true);
     
+    // Capturar valores de configuración actuales
+    const currentConfig = {
+      resolution: config.resolution,
+      quality: config.quality,
+      focus: config.focus,
+      processing: config.processing,
+      timestamp: new Date().toISOString()
+    };
+    
     try {
       // Aplicar enfoque antes de capturar si está configurado
       if (streamRef.current && config.focus.autoFocusBeforeCapture) {
@@ -87,6 +99,7 @@ const TakePhoto: React.FC = () => {
           const blob: Blob = await imageCaptureRef.current.takePhoto();
           const dataUrl = await blobToDataUrl(blob);
           setPhoto(dataUrl);
+          setCaptureValues(currentConfig);
           setError(null);
           console.log('Foto capturada a resolución nativa con ImageCapture');
           return;
@@ -100,6 +113,7 @@ const TakePhoto: React.FC = () => {
       
       if (imageSrc) {
         setPhoto(imageSrc);
+        setCaptureValues(currentConfig);
         setError(null);
         console.log('Foto capturada con getScreenshot');
       } else {
@@ -112,7 +126,7 @@ const TakePhoto: React.FC = () => {
     } finally {
       setIsCapturing(false);
     }
-  }, [getSingleShotFocusConstraints, config.focus.stabilizationTime, config.focus.autoFocusBeforeCapture, config.focus.focusMode]);
+  }, [getSingleShotFocusConstraints, config.focus, config.resolution, config.quality, config.processing]);
 
   // Función para captura automática: activa cámara, enfoca y captura
   const autoCapturePhoto = useCallback(async () => {
@@ -163,18 +177,32 @@ const TakePhoto: React.FC = () => {
     setError(null);
     streamRef.current = stream;
 
+    // Capturar los constraints de video que se están usando
+    const videoConstraints = getVideoConstraints();
+    setActualVideoConstraints(videoConstraints);
+
     try {
       const track = stream.getVideoTracks()[0];
       
+      // Obtener los constraints actuales del track
+      const currentSettings = track.getSettings();
+      console.log('Configuración actual del track:', currentSettings);
+      
       // Aplicar constraints de enfoque basados en la configuración
+      let focusConstraints;
       if (config.focus.useContinuousFocus && config.focus.focusMode === 'continuous') {
         console.log('Aplicando enfoque continuo...');
-        await (track as any).applyConstraints(getContinuousFocusConstraints() as any).catch(() => {});
+        focusConstraints = getContinuousFocusConstraints();
+        await (track as any).applyConstraints(focusConstraints as any).catch(() => {});
       } else {
         console.log('Enfoque continuo desactivado - usando configuración single-shot');
         // Aplicar configuración single-shot para el preview
-        await (track as any).applyConstraints(getSingleShotFocusConstraints() as any).catch(() => {});
+        focusConstraints = getSingleShotFocusConstraints();
+        await (track as any).applyConstraints(focusConstraints as any).catch(() => {});
       }
+
+      // Capturar los constraints de enfoque aplicados
+      setActualFocusConstraints(focusConstraints);
 
       if ('ImageCapture' in window) {
         try {
@@ -273,6 +301,21 @@ const TakePhoto: React.FC = () => {
             <div className="absolute top-4 right-4">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
             </div>
+            
+            {/* Display de valores en tiempo real */}
+            <div className="absolute top-4 left-4 bg-black bg-opacity-75 text-white text-xs p-3 rounded-lg max-w-xs">
+              <div className="font-bold text-green-400 mb-2">📹 Preview Activo</div>
+              <div className="space-y-1">
+                <div><span className="text-blue-300">Resolución:</span> {actualVideoConstraints?.width?.ideal || 'N/A'}×{actualVideoConstraints?.height?.ideal || 'N/A'}</div>
+                <div><span className="text-blue-300">Frame Rate:</span> {actualVideoConstraints?.frameRate?.ideal || 'N/A'} fps</div>
+                <div><span className="text-yellow-300">Modo Enfoque:</span> {config.focus.focusMode}</div>
+                <div><span className="text-yellow-300">Distancia:</span> {config.focus.distance}m ({(config.focus.distance * 100).toFixed(0)}cm)</div>
+                <div><span className="text-yellow-300">Auto-enfoque:</span> {config.focus.autoFocusBeforeCapture ? '✅' : '❌'}</div>
+                <div><span className="text-yellow-300">Constraints:</span> {actualFocusConstraints ? '✅ Aplicados' : '❌ No aplicados'}</div>
+                <div><span className="text-purple-300">Calidad:</span> {(config.quality.screenshotQuality * 100).toFixed(0)}%</div>
+                <div><span className="text-purple-300">Contraste:</span> {config.processing.filters.contrast.toFixed(1)}x</div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -289,6 +332,96 @@ const TakePhoto: React.FC = () => {
                 className="w-full h-auto max-h-96 object-contain mx-auto"
               />
             </div>
+            
+            {/* Valores utilizados en la captura */}
+            {captureValues && (
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h4 className="text-md font-semibold text-blue-400 mb-3">📊 Valores Utilizados en la Captura</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  
+                  {/* Resolución y Calidad */}
+                  <div className="space-y-2">
+                    <h5 className="font-medium text-green-300">📐 Resolución & Calidad</h5>
+                    <div className="bg-gray-700 rounded p-3 space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Resolución:</span>
+                        <span className="text-white font-mono">{captureValues.resolution.width}×{captureValues.resolution.height}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Frame Rate:</span>
+                        <span className="text-white font-mono">{captureValues.resolution.frameRate} fps</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Calidad Screenshot:</span>
+                        <span className="text-white font-mono">{(captureValues.quality.screenshotQuality * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Calidad Optimización:</span>
+                        <span className="text-white font-mono">{(captureValues.quality.optimizationQuality * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Enfoque */}
+                  <div className="space-y-2">
+                    <h5 className="font-medium text-yellow-300">🎯 Enfoque</h5>
+                    <div className="bg-gray-700 rounded p-3 space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Modo:</span>
+                        <span className="text-white font-mono">{captureValues.focus.focusMode}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Distancia:</span>
+                        <span className="text-white font-mono">{captureValues.focus.distance}m ({(captureValues.focus.distance * 100).toFixed(0)}cm)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Auto-enfoque:</span>
+                        <span className="text-white font-mono">{captureValues.focus.autoFocusBeforeCapture ? '✅ Activado' : '❌ Desactivado'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Estabilización:</span>
+                        <span className="text-white font-mono">{captureValues.focus.stabilizationTime}ms</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Procesamiento */}
+                  <div className="space-y-2">
+                    <h5 className="font-medium text-purple-300">🔧 Procesamiento</h5>
+                    <div className="bg-gray-700 rounded p-3 space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Contraste:</span>
+                        <span className="text-white font-mono">{captureValues.processing.filters.contrast.toFixed(1)}x</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Brillo:</span>
+                        <span className="text-white font-mono">{captureValues.processing.filters.brightness.toFixed(1)}x</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Saturación:</span>
+                        <span className="text-white font-mono">{captureValues.processing.filters.saturation.toFixed(2)}x</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Timestamp */}
+                  <div className="space-y-2">
+                    <h5 className="font-medium text-cyan-300">⏰ Información</h5>
+                    <div className="bg-gray-700 rounded p-3 space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Capturada:</span>
+                        <span className="text-white font-mono text-xs">{new Date(captureValues.timestamp).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Método:</span>
+                        <span className="text-white font-mono text-xs">ImageCapture/Webcam</span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            )}
             
             <div className="flex flex-wrap gap-3 justify-center">
               <button
