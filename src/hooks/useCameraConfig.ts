@@ -74,6 +74,43 @@ export const useCameraConfig = () => {
     setConfig(defaultConfig);
   }, []);
 
+  // Nuevas funciones para el sistema de perfil único
+  // Actualizar un campo específico usando path (ej: "resolution.width", "focus.continuousMode.brightness")
+  const updateField = useCallback((fieldPath: string, value: any) => {
+    const keys = fieldPath.split('.');
+    const newConfig = { ...config };
+    
+    // Navegar al objeto anidado y actualizar el valor
+    let current: any = newConfig;
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (!current[keys[i]]) {
+        current[keys[i]] = {};
+      }
+      current = current[keys[i]];
+    }
+    current[keys[keys.length - 1]] = value;
+    
+    setConfig(newConfig);
+    saveCameraConfig(newConfig);
+  }, [config]);
+
+  // Resetear a un preset específico
+  const resetToPreset = useCallback((presetName: string) => {
+    const newConfig = applyCameraPreset(presetName);
+    setConfig(newConfig);
+  }, []);
+
+  // Obtener el nombre del preset actual (si existe)
+  const getCurrentPresetName = useCallback(() => {
+    // Comparar la configuración actual con los presets para determinar cuál coincide
+    for (const [presetName, preset] of Object.entries(cameraPresets)) {
+      if (JSON.stringify(preset) === JSON.stringify({ ...defaultCameraConfig, ...preset })) {
+        return presetName;
+      }
+    }
+    return null;
+  }, [config]);
+
   // Obtener configuraciones de video constraints - optimizado para preview
   const getVideoConstraints = useCallback(() => {
     // Detectar si es móvil
@@ -156,6 +193,9 @@ export const useCameraConfig = () => {
     updateProcessing,
     applyPreset,
     resetToDefault,
+    updateField,
+    resetToPreset,
+    getCurrentPresetName,
     getVideoConstraints,
     getContinuousFocusConstraints,
     getSingleShotFocusConstraints,

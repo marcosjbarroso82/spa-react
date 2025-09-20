@@ -82,7 +82,7 @@ export const defaultCameraConfig: CameraConfig = {
   },
   
   focus: {
-    distance: 0.4,            // 40cm - distancia típica celular-pantalla de notebook
+    distance: 0.3,            // 30cm - distancia típica celular-pantalla de notebook
     stabilizationTime: 1500,  // Tiempo de estabilización reducido (ms)
     
     // Configuraciones continuas (durante la visualización)
