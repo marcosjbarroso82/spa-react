@@ -119,7 +119,7 @@ const Config: React.FC = () => {
     setMessage(null);
   };
 
-  const handlePreferenceChange = (key: 'imageInputMode' | 'autoRead' | 'debug', value: any) => {
+  const handlePreferenceChange = (key: 'imageInputMode' | 'autoRead' | 'debug' | 'allowImageUpload' | 'allowCameraCapture', value: any) => {
     updatePreference(key, value);
     setMessage({ type: 'success', text: 'Configuración actualizada' });
   };
@@ -452,6 +452,50 @@ const Config: React.FC = () => {
                 </div>
               </div>
 
+              {/* Sección de Permisos de Funcionalidades */}
+              <div className="mt-6">
+                <h3 className="text-lg font-medium text-white mb-4">🔒 Permisos de Funcionalidades</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Permitir Subir Imagen */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Permitir Subir Imagen
+                    </label>
+                    <div className="flex items-center space-x-3">
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={preferences.allowImageUpload}
+                          onChange={(e) => handlePreferenceChange('allowImageUpload', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500 focus:ring-2"
+                        />
+                        <span className="text-sm text-gray-300">📁 Habilitar carga de archivos</span>
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">Permite a los usuarios cargar imágenes desde archivos</p>
+                  </div>
+
+                  {/* Permitir Toma Foto */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Permitir Toma Foto
+                    </label>
+                    <div className="flex items-center space-x-3">
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={preferences.allowCameraCapture}
+                          onChange={(e) => handlePreferenceChange('allowCameraCapture', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500 focus:ring-2"
+                        />
+                        <span className="text-sm text-gray-300">📷 Habilitar captura con cámara</span>
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">Permite a los usuarios tomar fotos con la cámara</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="pt-2">
                 <button
                   onClick={handleResetPreferences}
@@ -649,6 +693,7 @@ const Config: React.FC = () => {
                   <li>• Modo de entrada predeterminado</li>
                   <li>• Lectura automática de respuestas</li>
                   <li>• Modo debug para desarrolladores</li>
+                  <li>• Permisos de funcionalidades</li>
                   <li>• Se guarda en localStorage</li>
                 </ul>
               </div>

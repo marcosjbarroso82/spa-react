@@ -4,6 +4,7 @@ import { useCredentials } from '../../hooks/useCredentials';
 import { useVariables } from '../../hooks/useVariables';
 import { useCameraConfig } from '../../hooks/useCameraConfig';
 import { useImageProcessing } from '../../hooks/useImageProcessing';
+import { usePreferences } from '../../hooks/usePreferences';
 import { ImageInfo } from '../../utils/imageUtils';
 import ImageDisplay from '../../components/ImageDisplay';
 import ImageComparison from '../../components/ImageComparison';
@@ -21,6 +22,7 @@ const AnswerFromImage: React.FC = () => {
   const { getVariableByKey, isLoading: variablesLoading } = useVariables();
   const { getContinuousFocusConstraints } = useCameraConfig();
   const { processImage, isProcessing: isImageProcessing } = useImageProcessing();
+  const { preferences, isLoading: preferencesLoading } = usePreferences();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [imageInfo, setImageInfo] = useState<ImageInfo[]>([]);
@@ -603,7 +605,7 @@ const AnswerFromImage: React.FC = () => {
     }
   };
 
-  if (credentialsLoading || variablesLoading) {
+  if (credentialsLoading || variablesLoading || preferencesLoading) {
     return <div className="text-center py-8 text-white">Cargando configuración…</div>;
   }
   
@@ -639,50 +641,77 @@ const AnswerFromImage: React.FC = () => {
       <div className="text-center">
         <div className="text-6xl mb-4">🖼️</div>
         <h2 className="text-2xl font-semibold mb-2 text-blue-400">Contestar por Imagen</h2>
-        <p className="text-gray-300">Sube imágenes o toma fotos, las procesamos con Mathpix OCR y consultamos Flowise.</p>
+        <p className="text-gray-300">
+          {preferences.allowImageUpload && preferences.allowCameraCapture 
+            ? "Sube imágenes o toma fotos, las procesamos con Mathpix OCR y consultamos Flowise."
+            : preferences.allowImageUpload 
+            ? "Sube imágenes, las procesamos con Mathpix OCR y consultamos Flowise."
+            : preferences.allowCameraCapture
+            ? "Toma fotos, las procesamos con Mathpix OCR y consultamos Flowise."
+            : "Procesa imágenes con Mathpix OCR y consulta Flowise."
+          }
+        </p>
       </div>
 
       <div className="bg-gray-700 rounded-lg p-6 space-y-4">
         {/* Opciones para agregar imágenes */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Subir archivo */}
-          <div>
-            <FileUpload
-              onFileSelect={handleFileSelect}
-              accept="image/*"
-              multiple={true}
-              maxSize={5}
-              buttonText="Seleccionar Imágenes"
-              icon="📁"
-              showInfo={true}
-            />
-          </div>
-
-          {/* Tomar foto */}
-          <div>
-            <div className="flex gap-2">
-              {!isCameraOn ? (
-                <button
-                  onClick={startCamera}
-                  className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded text-sm transition-colors duration-200"
-                >
-                  📹 Activar Cámara
-                </button>
-              ) : (
-                <button
-                  onClick={stopCamera}
-                  className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded text-sm transition-colors duration-200"
-                >
-                  📹 Desactivar
-                </button>
-              )}
+          {/* Subir archivo - Solo se muestra si está permitido */}
+          {preferences.allowImageUpload && (
+            <div>
+              <FileUpload
+                onFileSelect={handleFileSelect}
+                accept="image/*"
+                multiple={true}
+                maxSize={5}
+                buttonText="Seleccionar Imágenes"
+                icon="📁"
+                showInfo={true}
+              />
             </div>
-            <p className="text-xs text-gray-400 mt-1">Usa la cámara de tu dispositivo</p>
-          </div>
+          )}
+
+          {/* Tomar foto - Solo se muestra si está permitido */}
+          {preferences.allowCameraCapture && (
+            <div>
+              <div className="flex gap-2">
+                {!isCameraOn ? (
+                  <button
+                    onClick={startCamera}
+                    className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded text-sm transition-colors duration-200"
+                  >
+                    📹 Activar Cámara
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopCamera}
+                    className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded text-sm transition-colors duration-200"
+                  >
+                    📹 Desactivar
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Usa la cámara de tu dispositivo</p>
+            </div>
+          )}
+
+          {/* Mensaje si ninguna opción está disponible */}
+          {!preferences.allowImageUpload && !preferences.allowCameraCapture && (
+            <div className="col-span-full text-center py-8">
+              <div className="text-4xl mb-4">🚫</div>
+              <h3 className="text-lg font-medium text-yellow-400 mb-2">Funcionalidades Deshabilitadas</h3>
+              <p className="text-gray-300 mb-4">
+                Tanto la carga de archivos como la captura con cámara están deshabilitadas en la configuración.
+              </p>
+              <p className="text-sm text-gray-400">
+                Ve a <strong>Configuración</strong> para habilitar estas funcionalidades.
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Cámara */}
-        {isCameraOn && (
+        {/* Cámara - Solo se muestra si está permitido */}
+        {preferences.allowCameraCapture && isCameraOn && (
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-gray-300">Cámara activa:</h4>
             <CameraPreview

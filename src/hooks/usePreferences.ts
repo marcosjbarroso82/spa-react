@@ -4,6 +4,8 @@ export interface UserPreferences {
   imageInputMode: 'file' | 'camera';
   autoRead: boolean;
   debug: boolean;
+  allowImageUpload: boolean;
+  allowCameraCapture: boolean;
 }
 
 const PREFERENCES_STORAGE_KEY = 'app_preferences';
@@ -11,7 +13,9 @@ const PREFERENCES_STORAGE_KEY = 'app_preferences';
 const defaultPreferences: UserPreferences = {
   imageInputMode: 'file',
   autoRead: false,
-  debug: false
+  debug: false,
+  allowImageUpload: true,
+  allowCameraCapture: true
 };
 
 export const usePreferences = () => {
