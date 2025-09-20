@@ -52,12 +52,14 @@ const TakePhoto: React.FC = () => {
     setIsCapturing(true);
     
     try {
-      // Intentar enfocar antes de capturar usando configuraciones de cameraConfig
-      if (streamRef.current) {
+      // Aplicar enfoque antes de capturar si está configurado
+      if (streamRef.current && config.focus.autoFocusBeforeCapture) {
         const track = streamRef.current.getVideoTracks()[0];
         if (track) {
           try {
-            // Aplicar constraints de enfoque single-shot usando la configuración
+            console.log(`Aplicando enfoque ${config.focus.focusMode} antes de capturar...`);
+            
+            // Aplicar constraints de enfoque basados en la configuración
             const focusConstraints = getSingleShotFocusConstraints();
             await (track as any).applyConstraints(focusConstraints as any);
             
@@ -68,6 +70,8 @@ const TakePhoto: React.FC = () => {
             console.warn('No se pudo aplicar enfoque:', focusErr);
           }
         }
+      } else if (!config.focus.autoFocusBeforeCapture) {
+        console.log('Auto-enfoque desactivado - capturando sin reajustar enfoque');
       }
 
       // Intentar ImageCapture para obtener foto a resolución nativa
@@ -106,7 +110,7 @@ const TakePhoto: React.FC = () => {
     } finally {
       setIsCapturing(false);
     }
-  }, [getSingleShotFocusConstraints, config.focus.stabilizationTime]);
+  }, [getSingleShotFocusConstraints, config.focus.stabilizationTime, config.focus.autoFocusBeforeCapture, config.focus.focusMode]);
 
   // Función para captura automática: activa cámara, enfoca y captura
   const autoCapturePhoto = useCallback(async () => {
@@ -159,8 +163,16 @@ const TakePhoto: React.FC = () => {
 
     try {
       const track = stream.getVideoTracks()[0];
-      // Solicitar autoenfoque y ajustes continuos cuando sea posible (no estándar en TS)
-      await (track as any).applyConstraints(getContinuousFocusConstraints() as any).catch(() => {});
+      
+      // Aplicar constraints de enfoque basados en la configuración
+      if (config.focus.useContinuousFocus && config.focus.focusMode === 'continuous') {
+        console.log('Aplicando enfoque continuo...');
+        await (track as any).applyConstraints(getContinuousFocusConstraints() as any).catch(() => {});
+      } else {
+        console.log('Enfoque continuo desactivado - usando configuración single-shot');
+        // Aplicar configuración single-shot para el preview
+        await (track as any).applyConstraints(getSingleShotFocusConstraints() as any).catch(() => {});
+      }
 
       if ('ImageCapture' in window) {
         try {
@@ -289,6 +301,9 @@ const TakePhoto: React.FC = () => {
           <ul className="text-sm text-gray-300 space-y-1">
             <li>• <strong>Foto Automática:</strong> Activa la cámara, enfoca automáticamente y captura la foto</li>
             <li>• <strong>Activar Cámara:</strong> Solo activa la cámara para posicionar manualmente</li>
+            <li>• <strong>Modo de Enfoque:</strong> Configurado en {config.focus.focusMode === 'single-shot' ? 'Single-shot' : config.focus.focusMode === 'continuous' ? 'Continuous' : 'Manual'}</li>
+            <li>• <strong>Enfoque Continuo:</strong> {config.focus.useContinuousFocus ? 'Activado' : 'Desactivado'} durante el preview</li>
+            <li>• <strong>Auto-enfoque:</strong> {config.focus.autoFocusBeforeCapture ? 'Se aplicará antes de capturar' : 'Desactivado - captura directa'}</li>
             <li>• Permite el acceso a la cámara cuando se solicite</li>
             <li>• Posiciona la cámara y haz clic en "Tomar Foto" (si la cámara ya está activa)</li>
             <li>• Puedes descargar la foto o tomar otra</li>

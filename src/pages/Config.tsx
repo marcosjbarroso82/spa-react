@@ -338,37 +338,96 @@ const Config: React.FC = () => {
                   {/* Enfoque */}
                   <div className="space-y-4">
                     <h4 className="text-md font-medium text-yellow-300">🎯 Enfoque</h4>
-                    <div className="space-y-3">
+                    <div className="space-y-4">
+                      
+                      {/* Modo de Enfoque */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          Distancia (metros)
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Modo de Enfoque
                         </label>
-                        <input
-                          type="range"
-                          min="0.1"
-                          max="1.0"
-                          step="0.1"
-                          value={cameraConfig.focus.distance}
-                          onChange={(e) => updateField('focus.distance', parseFloat(e.target.value))}
-                          className="w-full"
-                        />
+                        <select
+                          value={cameraConfig.focus.focusMode}
+                          onChange={(e) => updateField('focus.focusMode', e.target.value as 'continuous' | 'single-shot' | 'manual')}
+                          className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="single-shot">📸 Single-shot (Recomendado para OCR)</option>
+                          <option value="continuous">🔄 Continuous (Para video dinámico)</option>
+                          <option value="manual">✋ Manual (Control total)</option>
+                        </select>
                         <div className="text-xs text-gray-400 mt-1">
-                          {cameraConfig.focus.distance}m ({(cameraConfig.focus.distance * 100).toFixed(0)}cm) - {cameraConfig.focus.distance < 0.3 ? 'Cerca' : cameraConfig.focus.distance < 0.6 ? 'Media' : 'Lejos'}
+                          {cameraConfig.focus.focusMode === 'single-shot' && 'Enfoca una vez y mantiene fijo - Ideal para OCR de pantallas'}
+                          {cameraConfig.focus.focusMode === 'continuous' && 'Enfoque automático continuo - Consume más batería'}
+                          {cameraConfig.focus.focusMode === 'manual' && 'Control manual del enfoque - Requiere ajuste manual'}
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          Tiempo Estabilización (ms)
-                        </label>
-                        <input
-                          type="number"
-                          value={cameraConfig.focus.stabilizationTime}
-                          onChange={(e) => updateField('focus.stabilizationTime', parseInt(e.target.value) || 1000)}
-                          className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
-                          min="500"
-                          max="3000"
-                        />
+
+                      {/* Opciones de Enfoque */}
+                      <div className="space-y-3">
+                        <div className="flex items-center space-x-3">
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={cameraConfig.focus.useContinuousFocus}
+                              onChange={(e) => updateField('focus.useContinuousFocus', e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                            <span className="text-sm text-gray-300">🔄 Usar enfoque continuo durante preview</span>
+                          </label>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Solo aplica si el modo es 'continuous'. Mantiene el enfoque automático mientras ves la imagen.
+                        </div>
+                        
+                        <div className="flex items-center space-x-3">
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={cameraConfig.focus.autoFocusBeforeCapture}
+                              onChange={(e) => updateField('focus.autoFocusBeforeCapture', e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                            <span className="text-sm text-gray-300">🎯 Enfocar automáticamente antes de capturar</span>
+                          </label>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Aplica enfoque automático justo antes de tomar la foto para máxima nitidez.
+                        </div>
                       </div>
+
+                      {/* Distancia y Estabilización */}
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-1">
+                            Distancia (metros)
+                          </label>
+                          <input
+                            type="range"
+                            min="0.1"
+                            max="1.0"
+                            step="0.1"
+                            value={cameraConfig.focus.distance}
+                            onChange={(e) => updateField('focus.distance', parseFloat(e.target.value))}
+                            className="w-full"
+                          />
+                          <div className="text-xs text-gray-400 mt-1">
+                            {cameraConfig.focus.distance}m ({(cameraConfig.focus.distance * 100).toFixed(0)}cm) - {cameraConfig.focus.distance < 0.3 ? 'Cerca' : cameraConfig.focus.distance < 0.6 ? 'Media' : 'Lejos'}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-1">
+                            Tiempo Estabilización (ms)
+                          </label>
+                          <input
+                            type="number"
+                            value={cameraConfig.focus.stabilizationTime}
+                            onChange={(e) => updateField('focus.stabilizationTime', parseInt(e.target.value) || 1000)}
+                            className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-2 focus:ring-blue-500"
+                            min="500"
+                            max="3000"
+                          />
+                        </div>
+                      </div>
+
                     </div>
                   </div>
 
@@ -482,6 +541,25 @@ const Config: React.FC = () => {
                         <span className="text-sm text-white font-mono">{(cameraConfig.quality.screenshotQuality * 100).toFixed(0)}%</span>
                       </div>
                       <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Modo de enfoque:</span>
+                        <span className="text-sm text-white font-mono">
+                          {cameraConfig.focus.focusMode === 'single-shot' ? '📸 Single-shot' : 
+                           cameraConfig.focus.focusMode === 'continuous' ? '🔄 Continuous' : '✋ Manual'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Enfoque continuo:</span>
+                        <span className="text-sm text-white font-mono">
+                          {cameraConfig.focus.useContinuousFocus ? '✅ Activado' : '❌ Desactivado'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Auto-enfoque captura:</span>
+                        <span className="text-sm text-white font-mono">
+                          {cameraConfig.focus.autoFocusBeforeCapture ? '✅ Activado' : '❌ Desactivado'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-300">Distancia enfoque:</span>
                         <span className="text-sm text-white font-mono">{cameraConfig.focus.distance}m</span>
                       </div>
@@ -500,6 +578,12 @@ const Config: React.FC = () => {
                   <div className="space-y-4">
                     <h4 className="text-md font-medium text-green-300">💡 Recomendaciones para OCR</h4>
                     <div className="bg-gray-800 rounded-lg p-4 space-y-3">
+                      <div className="flex items-start space-x-2">
+                        <span className="text-green-400 text-sm">✅</span>
+                        <div className="text-sm text-gray-300">
+                          <strong>Modo de enfoque:</strong> Usa 'Single-shot' para OCR - evita el "hunting" del enfoque continuo
+                        </div>
+                      </div>
                       <div className="flex items-start space-x-2">
                         <span className="text-green-400 text-sm">✅</span>
                         <div className="text-sm text-gray-300">
@@ -522,6 +606,12 @@ const Config: React.FC = () => {
                         <span className="text-green-400 text-sm">✅</span>
                         <div className="text-sm text-gray-300">
                           <strong>Para mejor OCR:</strong> Saturación baja (0.1-0.3) y calidad alta (0.8+)
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <span className="text-green-400 text-sm">✅</span>
+                        <div className="text-sm text-gray-300">
+                          <strong>Enfoque continuo:</strong> Desactívalo para OCR - ahorra batería y evita reajustes
                         </div>
                       </div>
                     </div>

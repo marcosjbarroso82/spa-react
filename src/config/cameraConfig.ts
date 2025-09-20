@@ -28,6 +28,12 @@ export interface CameraConfig {
   
   // Configuraciones de enfoque
   focus: {
+    // Modo de enfoque principal: 'continuous', 'single-shot', 'manual'
+    focusMode: 'continuous' | 'single-shot' | 'manual';
+    // Si usar enfoque continuo durante el preview
+    useContinuousFocus: boolean;
+    // Si aplicar enfoque automático antes de capturar
+    autoFocusBeforeCapture: boolean;
     distance: number;
     stabilizationTime: number;
     continuousMode: {
@@ -82,8 +88,12 @@ export const defaultCameraConfig: CameraConfig = {
   },
   
   focus: {
-    distance: 0.3,            // 30cm - distancia típica celular-pantalla de notebook
-    stabilizationTime: 1500,  // Tiempo de estabilización reducido (ms)
+    // Configuración de enfoque principal
+    focusMode: 'single-shot',     // Modo por defecto: single-shot para OCR
+    useContinuousFocus: false,    // No usar enfoque continuo por defecto
+    autoFocusBeforeCapture: true, // Aplicar enfoque antes de capturar
+    distance: 0.3,                // 30cm - distancia típica celular-pantalla de notebook
+    stabilizationTime: 1500,      // Tiempo de estabilización reducido (ms)
     
     // Configuraciones continuas (durante la visualización)
     continuousMode: {
@@ -141,7 +151,10 @@ export const cameraPresets: Record<string, Partial<CameraConfig>> = {
       maxHeight: 1080
     },
     focus: {
-      distance: 0.2, // 20cm para documentos
+      focusMode: 'single-shot',     // Single-shot para documentos (distancia fija)
+      useContinuousFocus: false,    // No usar enfoque continuo
+      autoFocusBeforeCapture: true, // Enfocar antes de capturar
+      distance: 0.2,                // 20cm para documentos
       stabilizationTime: 1000,
       continuousMode: {
         focusMode: 'continuous',
@@ -184,6 +197,9 @@ export const cameraPresets: Record<string, Partial<CameraConfig>> = {
       maxHeight: 720
     },
     focus: {
+      focusMode: 'continuous',      // Continuous para móviles (más dinámico)
+      useContinuousFocus: true,     // Usar enfoque continuo en móviles
+      autoFocusBeforeCapture: true, // Enfocar antes de capturar
       distance: 0.4,
       stabilizationTime: 1000,
       continuousMode: {
