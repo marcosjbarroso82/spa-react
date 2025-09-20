@@ -3,12 +3,17 @@ import Webcam from 'react-webcam';
 import { useCameraConfig } from '../../hooks/useCameraConfig';
 
 const TakePhoto: React.FC = () => {
-  const { getVideoConstraints, getContinuousFocusConstraints } = useCameraConfig();
+  const { 
+    getVideoConstraints, 
+    getContinuousFocusConstraints, 
+    getSingleShotFocusConstraints,
+    config 
+  } = useCameraConfig();
   const [photo, setPhoto] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [isFocusing, setIsFocusing] = useState(false);
+  const [isAutoCapturing, setIsAutoCapturing] = useState(false);
   const webcamRef = useRef<Webcam>(null);
 
   // Referencias al MediaStream y a ImageCapture para fotos a resolución nativa
@@ -45,26 +50,19 @@ const TakePhoto: React.FC = () => {
     }
 
     setIsCapturing(true);
-    setIsFocusing(true);
     
     try {
-      // Intentar enfocar antes de capturar
+      // Intentar enfocar antes de capturar usando configuraciones de cameraConfig
       if (streamRef.current) {
         const track = streamRef.current.getVideoTracks()[0];
         if (track) {
           try {
-            // Aplicar constraints de enfoque single-shot
-            const focusConstraints = {
-              advanced: [
-                { focusMode: 'single-shot' },
-                { exposureMode: 'single-shot' },
-                { whiteBalanceMode: 'single-shot' }
-              ]
-            };
+            // Aplicar constraints de enfoque single-shot usando la configuración
+            const focusConstraints = getSingleShotFocusConstraints();
             await (track as any).applyConstraints(focusConstraints as any);
             
-            // Esperar un momento para que el enfoque se estabilice
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // Esperar el tiempo de estabilización configurado
+            await new Promise(resolve => setTimeout(resolve, config.focus.stabilizationTime));
             console.log('Enfoque completado');
           } catch (focusErr) {
             console.warn('No se pudo aplicar enfoque:', focusErr);
@@ -107,9 +105,37 @@ const TakePhoto: React.FC = () => {
       setError('Error al capturar la foto. Intenta de nuevo.');
     } finally {
       setIsCapturing(false);
-      setIsFocusing(false);
     }
-  }, []);
+  }, [getSingleShotFocusConstraints, config.focus.stabilizationTime]);
+
+  // Función para captura automática: activa cámara, enfoca y captura
+  const autoCapturePhoto = useCallback(async () => {
+    setIsAutoCapturing(true);
+    setError(null);
+    
+    try {
+      // Si la cámara no está activa, activarla primero
+      if (!isCameraOn) {
+        console.log('Activando cámara para captura automática...');
+        setIsCameraOn(true);
+        
+        // Esperar a que la cámara se inicialice
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      
+      // Esperar un poco más para que el stream esté completamente listo
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Ahora capturar la foto
+      await capturePhoto();
+      
+    } catch (err) {
+      console.error('Error durante la captura automática:', err);
+      setError('Error durante la captura automática. Intenta de nuevo.');
+    } finally {
+      setIsAutoCapturing(false);
+    }
+  }, [isCameraOn, capturePhoto]);
 
   const downloadPhoto = () => {
     if (!photo) return;
@@ -171,12 +197,22 @@ const TakePhoto: React.FC = () => {
         {/* Controles de cámara */}
         <div className="flex flex-wrap gap-3 justify-center">
           {!isCameraOn ? (
-            <button
-              onClick={startCamera}
-              className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors duration-200 flex items-center gap-2"
-            >
-              📹 Activar Cámara
-            </button>
+            <>
+              <button
+                onClick={startCamera}
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors duration-200 flex items-center gap-2"
+              >
+                📹 Activar Cámara
+              </button>
+              
+              <button
+                onClick={autoCapturePhoto}
+                disabled={isAutoCapturing}
+                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors duration-200 flex items-center gap-2"
+              >
+                {isAutoCapturing ? '🤖 Capturando...' : '🤖 Foto Automática'}
+              </button>
+            </>
           ) : (
             <>
               <button
@@ -251,9 +287,10 @@ const TakePhoto: React.FC = () => {
         <div className="bg-gray-800 rounded-lg p-4">
           <h4 className="text-lg font-semibold text-blue-400 mb-2">Instrucciones:</h4>
           <ul className="text-sm text-gray-300 space-y-1">
-            <li>• Haz clic en "Activar Cámara" para comenzar</li>
+            <li>• <strong>Foto Automática:</strong> Activa la cámara, enfoca automáticamente y captura la foto</li>
+            <li>• <strong>Activar Cámara:</strong> Solo activa la cámara para posicionar manualmente</li>
             <li>• Permite el acceso a la cámara cuando se solicite</li>
-            <li>• Posiciona la cámara y haz clic en "Tomar Foto"</li>
+            <li>• Posiciona la cámara y haz clic en "Tomar Foto" (si la cámara ya está activa)</li>
             <li>• Puedes descargar la foto o tomar otra</li>
             <li>• Haz clic en "Desactivar Cámara" cuando termines</li>
           </ul>
