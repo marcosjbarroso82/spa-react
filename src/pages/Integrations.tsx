@@ -23,37 +23,57 @@ const Integrations: React.FC = () => {
     { path: '/integrations/image-processor', label: 'Procesador de Imágenes', icon: '🖼️⚙️', description: 'Probar parámetros de procesamiento de imágenes para OCR' },
   ];
 
+  // Determinar si hay una integración específica seleccionada
+  const isSpecificIntegration = location.pathname !== '/integrations' && location.pathname.startsWith('/integrations/');
+  const selectedIntegration = isSpecificIntegration 
+    ? integrationItems.find(item => item.path === location.pathname)
+    : null;
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-center mb-8 text-blue-400">
-          🔧 Integraciones
-        </h1>
-        
-        <p className="text-center text-gray-300 mb-8">
-          Prueba diferentes funcionalidades del navegador y dispositivos
-        </p>
+        {/* Solo mostrar título y descripción cuando no hay integración específica seleccionada */}
+        {!isSpecificIntegration && (
+          <>
+            <h1 className="text-3xl font-bold text-center mb-8 text-blue-400">
+              🔧 Integraciones
+            </h1>
+            
+            <p className="text-center text-gray-300 mb-8">
+              Prueba diferentes funcionalidades del navegador y dispositivos
+            </p>
+          </>
+        )}
 
-        {/* Navegación de integraciones */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          {integrationItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`p-6 rounded-lg border-2 transition-all duration-200 ${
-                location.pathname === item.path
-                  ? 'border-blue-500 bg-blue-900/30'
-                  : 'border-gray-600 bg-gray-800 hover:border-blue-400 hover:bg-gray-700'
-              }`}
-            >
+        {/* Mostrar solo la integración seleccionada o todas las opciones */}
+        {isSpecificIntegration && selectedIntegration ? (
+          <div className="mb-8">
+            
+            <div className="p-6 rounded-lg border-2 border-blue-500 bg-blue-900/30">
               <div className="text-center">
-                <span className="text-4xl mb-3 block">{item.icon}</span>
-                <h3 className="text-xl font-semibold mb-2">{item.label}</h3>
-                <p className="text-sm text-gray-400">{item.description}</p>
+                <span className="text-4xl mb-3 block">{selectedIntegration.icon}</span>
+                <h3 className="text-xl font-semibold mb-2">{selectedIntegration.label}</h3>
+                <p className="text-sm text-gray-400">{selectedIntegration.description}</p>
               </div>
-            </Link>
-          ))}
-        </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            {integrationItems.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                className="p-6 rounded-lg border-2 border-gray-600 bg-gray-800 hover:border-blue-400 hover:bg-gray-700 transition-all duration-200"
+              >
+                <div className="text-center">
+                  <span className="text-4xl mb-3 block">{item.icon}</span>
+                  <h3 className="text-xl font-semibold mb-2">{item.label}</h3>
+                  <p className="text-sm text-gray-400">{item.description}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
 
         {/* Contenido de las sub-rutas */}
         <div className="bg-gray-800 rounded-lg p-6">
