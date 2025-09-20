@@ -433,6 +433,159 @@ const Config: React.FC = () => {
                 </div>
               </div>
 
+              {/* Información de la Cámara para OCR de Pantallas */}
+              <div>
+                <h3 className="text-lg font-medium text-white mb-3">📊 Información de la Cámara</h3>
+                <p className="text-sm text-gray-300 mb-4">
+                  Información relevante para optimizar la captura de pantallas de notebook para OCR:
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Capacidades Técnicas */}
+                  <div className="space-y-4">
+                    <h4 className="text-md font-medium text-cyan-300">🔧 Capacidades Técnicas</h4>
+                    <div className="bg-gray-800 rounded-lg p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Resolución máxima:</span>
+                        <span className="text-sm text-white font-mono">3840×2160</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Frame rates:</span>
+                        <span className="text-sm text-white font-mono">15-60 fps</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Enfoque mínimo:</span>
+                        <span className="text-sm text-white font-mono">0.1m (10cm)</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Estabilización:</span>
+                        <span className="text-sm text-white font-mono">Digital</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Formato nativo:</span>
+                        <span className="text-sm text-white font-mono">JPEG/PNG</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Configuración Actual */}
+                  <div className="space-y-4">
+                    <h4 className="text-md font-medium text-amber-300">⚙️ Configuración Actual</h4>
+                    <div className="bg-gray-800 rounded-lg p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Resolución configurada:</span>
+                        <span className="text-sm text-white font-mono">{cameraConfig.resolution.width}×{cameraConfig.resolution.height}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Calidad screenshot:</span>
+                        <span className="text-sm text-white font-mono">{(cameraConfig.quality.screenshotQuality * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Distancia enfoque:</span>
+                        <span className="text-sm text-white font-mono">{cameraConfig.focus.distance}m</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Tiempo estabilización:</span>
+                        <span className="text-sm text-white font-mono">{cameraConfig.focus.stabilizationTime}ms</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Contraste:</span>
+                        <span className="text-sm text-white font-mono">{cameraConfig.processing.filters.contrast.toFixed(1)}x</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recomendaciones para OCR */}
+                  <div className="space-y-4">
+                    <h4 className="text-md font-medium text-green-300">💡 Recomendaciones para OCR</h4>
+                    <div className="bg-gray-800 rounded-lg p-4 space-y-3">
+                      <div className="flex items-start space-x-2">
+                        <span className="text-green-400 text-sm">✅</span>
+                        <div className="text-sm text-gray-300">
+                          <strong>Para texto pequeño:</strong> Usa resolución alta (2560×1440+) y contraste alto (1.5x+)
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <span className="text-green-400 text-sm">✅</span>
+                        <div className="text-sm text-gray-300">
+                          <strong>Para pantallas brillantes:</strong> Reduce brillo (0.8-1.0) y aumenta contraste
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <span className="text-green-400 text-sm">✅</span>
+                        <div className="text-sm text-gray-300">
+                          <strong>Para estabilidad:</strong> Usa tiempo de estabilización alto (1500ms+) y distancia 0.3-0.4m
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <span className="text-green-400 text-sm">✅</span>
+                        <div className="text-sm text-gray-300">
+                          <strong>Para mejor OCR:</strong> Saturación baja (0.1-0.3) y calidad alta (0.8+)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Métricas de Rendimiento */}
+                  <div className="space-y-4">
+                    <h4 className="text-md font-medium text-purple-300">📈 Rendimiento Estimado</h4>
+                    <div className="bg-gray-800 rounded-lg p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Tamaño de archivo:</span>
+                        <span className="text-sm text-white font-mono">
+                          {Math.round((cameraConfig.resolution.width * cameraConfig.resolution.height * cameraConfig.quality.screenshotQuality * 0.1) / 1000)}KB
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Tiempo de captura:</span>
+                        <span className="text-sm text-white font-mono">
+                          {cameraConfig.focus.stabilizationTime + 200}ms
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Calidad OCR estimada:</span>
+                        <span className="text-sm text-white font-mono">
+                          {cameraConfig.resolution.width >= 2560 && cameraConfig.processing.filters.contrast >= 1.5 ? 'Alta' : 
+                           cameraConfig.resolution.width >= 1920 && cameraConfig.processing.filters.contrast >= 1.2 ? 'Media' : 'Baja'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-300">Uso de memoria:</span>
+                        <span className="text-sm text-white font-mono">
+                          {Math.round((cameraConfig.resolution.width * cameraConfig.resolution.height * 4) / 1024 / 1024)}MB
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Consejos Prácticos */}
+                <div className="mt-6 bg-blue-900 bg-opacity-30 border border-blue-600 rounded-lg p-4">
+                  <h4 className="text-md font-medium text-blue-300 mb-3">🎯 Consejos para Mejor OCR de Pantallas</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300">
+                    <div>
+                      <strong>📱 Posicionamiento:</strong>
+                      <ul className="mt-1 space-y-1 text-xs">
+                        <li>• Mantén la cámara a 30-40cm de la pantalla</li>
+                        <li>• Evita ángulos muy pronunciados</li>
+                        <li>• Asegúrate de que toda la pantalla esté en el encuadre</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <strong>💡 Iluminación:</strong>
+                      <ul className="mt-1 space-y-1 text-xs">
+                        <li>• Evita reflejos directos en la pantalla</li>
+                        <li>• Usa iluminación uniforme de fondo</li>
+                        <li>• Ajusta el brillo de la pantalla si es necesario</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
             </div>
           </div>
 
